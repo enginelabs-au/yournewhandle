@@ -1870,3 +1870,82 @@ input[type="range"].neon-slider::-webkit-slider-thumb {
 .dr-footer-view-all:hover {
   color: #93c5fd;
 }
+
+/* Randomize matrix animation */
+.randomize-matrix-panel-active {
+  box-shadow: 0 0 24px rgb(168 85 247 / 0.12);
+}
+
+.randomize-ticker-flash {
+  animation: randomize-ticker-flash 0.18s ease-out;
+}
+
+@keyframes randomize-ticker-flash {
+  0% {
+    opacity: 0.35;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.randomize-chip {
+  animation: randomize-chip-in 0.35s ease both;
+}
+
+@keyframes randomize-chip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.preset-shuffle-active {
+  animation: preset-shuffle-pulse 0.18s ease-out;
+}
+
+@keyframes preset-shuffle-pulse {
+  0% {
+    transform: scale(0.97);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.matrix-randomize-active {
+  animation: matrix-randomize-glow 1.2s ease-in-out infinite;
+}
+
+.matrix-menu-stack {
+  gap: 0.5rem;
+}
+
+.matrix-accordion + .matrix-accordion {
+  margin-top: 0;
+}
+
+@keyframes matrix-randomize-glow {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgb(168 85 247 / 0);
+  }
+  50% {
+    box-shadow: inset 0 0 32px rgb(168 85 247 / 0.08);
+  }
+}
+
+.gen-results-zone-active {
+  border-color: rgb(168 85 247 / 0.35);
+  box-shadow: 0 0 20px rgb(168 85 247 / 0.12);
+}
+

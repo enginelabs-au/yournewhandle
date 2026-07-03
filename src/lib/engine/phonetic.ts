@@ -2,6 +2,23 @@ import type { GenerationParams, LanguageId, PhonemePool } from "@/lib/types";
 import { LANGUAGE_IDS } from "@/lib/types";
 import { getPool } from "@/lib/phonemes";
 import {
+  filterCodasForEnding,
+  openSyllableRateForEnding,
+} from "./ending-style";
+import {
+  classifyNucleus,
+  filterNucleiByHarmony,
+  type VowelClass,
+} from "./vowel-harmony";
+import { applyMoodToPool } from "./mood";
+import {
+  extractEchoAnchor,
+  filterNucleiByEcho,
+  filterOnsetsByEcho,
+  shouldApplyEcho,
+  type EchoAnchor,
+} from "./phonetic-echo";
+import {
   filterByBlocked,
   filterNuclei,
   applyPrefixSuffix,
@@ -12,6 +29,13 @@ import { pickRandom, randomChance } from "./random";
 
 export const OPEN_SYLLABLE_RATE = 0.2;
 const MAX_SYLLABLE_ATTEMPTS = 10;
+
+export type SyllableBuildContext = {
+  isFinalSyllable: boolean;
+  harmonyAnchor: VowelClass | null;
+  syllableIndex: number;
+  echoAnchor: EchoAnchor | null;
+};
 
 export function selectLanguageForSyllable(
   syllableIndex: number,
@@ -49,29 +73,111 @@ export function selectLanguageForSyllable(
 }
 
 function filteredPool(pool: PhonemePool, params: GenerationParams): PhonemePool {
-  const onsets = filterByBlocked(pool.onsets, params.blockedConsonants);
-  const nuclei = filterNuclei(pool.nuclei, params.allowedVowels);
-  const codas = filterByBlocked(pool.codas, params.blockedConsonants);
+  const mooded = applyMoodToPool(pool, params.moodVector);
+  const onsets = filterByBlocked(mooded.onsets, params.blockedConsonants);
+  const nuclei = filterNuclei(mooded.nuclei, params.allowedVowels);
+  let codas = filterByBlocked(mooded.codas, params.blockedConsonants);
+
+  if (params.strictMora) {
+    codas = ["", "n"];
+  }
 
   return {
-    onsets: onsets.length > 0 ? onsets : [...pool.onsets],
-    nuclei: nuclei.length > 0 ? nuclei : [...pool.nuclei],
-    codas: codas.length > 0 ? codas : [...pool.codas],
+    onsets: onsets.length > 0 ? onsets : [...mooded.onsets],
+    nuclei: nuclei.length > 0 ? nuclei : [...mooded.nuclei],
+    codas: codas.length > 0 ? codas : [...mooded.codas],
   };
+}
+
+function resolvePoolForSyllable(
+  params: GenerationParams,
+  syllableIndex: number,
+): PhonemePool {
+  if (params.strictMora) {
+    return getPool("japanese");
+  }
+  const lang = selectLanguageForSyllable(syllableIndex, params.languageWeights);
+  return getPool(lang);
 }
 
 export function buildSyllable(
   pool: PhonemePool,
   params: GenerationParams,
   forceOpen = false,
+  context?: SyllableBuildContext,
 ): string | null {
   const filtered = filteredPool(pool, params);
+  const isFinal = context?.isFinalSyllable ?? false;
+  const harmonyAnchor = context?.harmonyAnchor ?? null;
+
+  let nuclei = filterNucleiByHarmony(
+    filtered.nuclei,
+    params.vowelHarmony,
+    harmonyAnchor,
+  );
+
+  const codas = filterCodasForEnding(
+    filtered.codas,
+    params.endingStyle,
+    isFinal,
+  );
+
+  const openRate = openSyllableRateForEnding(
+    params.endingStyle,
+    isFinal,
+    params.strictMora ? 0.85 : OPEN_SYLLABLE_RATE,
+  );
+
+  let onsets = filtered.onsets;
+  if (
+    context &&
+    params.phoneticEcho &&
+    context.echoAnchor &&
+    shouldApplyEcho(context.syllableIndex, true)
+  ) {
+    onsets = filterOnsetsByEcho(onsets, context.echoAnchor);
+  }
 
   for (let attempt = 0; attempt < MAX_SYLLABLE_ATTEMPTS; attempt += 1) {
-    const onset = pickRandom(filtered.onsets);
-    const nucleus = pickRandom(filtered.nuclei);
-    const useOpen = forceOpen || randomChance(OPEN_SYLLABLE_RATE);
-    const coda = useOpen ? "" : pickRandom(filtered.codas);
+    const onset = pickRandom(onsets);
+    let activeNuclei = nuclei;
+    if (
+      context &&
+      params.phoneticEcho &&
+      context.echoAnchor &&
+      shouldApplyEcho(context.syllableIndex, true)
+    ) {
+      activeNuclei = filterNucleiByEcho(nuclei, context.echoAnchor);
+    }
+    const nucleus = pickRandom(activeNuclei);
+    if (
+      context &&
+      params.vowelHarmony !== "off" &&
+      context.harmonyAnchor === null
+    ) {
+      context.harmonyAnchor = classifyNucleus(nucleus);
+      nuclei = filterNucleiByHarmony(
+        filtered.nuclei,
+        params.vowelHarmony,
+        context.harmonyAnchor,
+      );
+    }
+    if (
+      context &&
+      params.phoneticEcho &&
+      context.syllableIndex === 0 &&
+      !context.echoAnchor
+    ) {
+      context.echoAnchor = extractEchoAnchor(
+        `${onset}${nucleus}`,
+        params.echoType,
+      );
+    }
+    const useOpen =
+      forceOpen ||
+      randomChance(openRate) ||
+      (params.strictMora && isFinal);
+    const coda = useOpen ? "" : pickRandom(codas);
     const syllable = `${onset}${nucleus}${coda}`;
 
     if (syllable.length >= 2 && syllable.length <= 8) {
@@ -107,7 +213,9 @@ export function fitToLengthRange(
   }
 
   for (let pad = 0; pad < 2 && result.length < minLen; pad += 1) {
-    const lang = selectLanguageForSyllable(pad, params.languageWeights);
+    const lang = params.strictMora
+      ? "japanese"
+      : selectLanguageForSyllable(pad, params.languageWeights);
     const extra = buildSyllable(getPool(lang), params, true);
     if (!extra) {
       break;
@@ -131,10 +239,22 @@ export function buildWordCore(
     : (syllableTarget ?? resolveSyllableCount(params));
 
   const syllables: string[] = [];
+  const syllableContext: SyllableBuildContext = {
+    isFinalSyllable: false,
+    harmonyAnchor: null,
+    syllableIndex: 0,
+    echoAnchor: null,
+  };
 
   for (let i = 0; i < syllableCount; i += 1) {
-    const lang = selectLanguageForSyllable(i, params.languageWeights);
-    const syllable = buildSyllable(getPool(lang), params);
+    syllableContext.isFinalSyllable = i === syllableCount - 1;
+    syllableContext.syllableIndex = i;
+    const syllable = buildSyllable(
+      resolvePoolForSyllable(params, i),
+      params,
+      false,
+      syllableContext,
+    );
     if (!syllable) {
       return null;
     }

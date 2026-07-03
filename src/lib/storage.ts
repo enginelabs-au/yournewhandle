@@ -55,6 +55,25 @@ function mergeParams(partial: Partial<GenerationParams>): GenerationParams {
     blockedConsonants:
       partial.blockedConsonants ?? [...DEFAULT_GENERATION_PARAMS.blockedConsonants],
     batchSize: partial.batchSize ?? DEFAULT_GENERATION_PARAMS.batchSize,
+    vowelHarmony: partial.vowelHarmony ?? DEFAULT_GENERATION_PARAMS.vowelHarmony,
+    blendOverlap: partial.blendOverlap ?? DEFAULT_GENERATION_PARAMS.blendOverlap,
+    endingStyle: partial.endingStyle ?? DEFAULT_GENERATION_PARAMS.endingStyle,
+    clutterGuard: partial.clutterGuard ?? DEFAULT_GENERATION_PARAMS.clutterGuard,
+    aestheticStrictness:
+      partial.aestheticStrictness ?? DEFAULT_GENERATION_PARAMS.aestheticStrictness,
+    affixTier: partial.affixTier ?? DEFAULT_GENERATION_PARAMS.affixTier,
+    affixPlacement:
+      partial.affixPlacement ?? DEFAULT_GENERATION_PARAMS.affixPlacement,
+    moodVector: partial.moodVector ?? DEFAULT_GENERATION_PARAMS.moodVector,
+    phoneticEcho: partial.phoneticEcho ?? DEFAULT_GENERATION_PARAMS.phoneticEcho,
+    echoType: partial.echoType ?? DEFAULT_GENERATION_PARAMS.echoType,
+    blueprint: partial.blueprint ?? DEFAULT_GENERATION_PARAMS.blueprint,
+    strictMora: partial.strictMora ?? DEFAULT_GENERATION_PARAMS.strictMora,
+    filterCollisions:
+      partial.filterCollisions ?? DEFAULT_GENERATION_PARAMS.filterCollisions,
+    seed: partial.seed ?? DEFAULT_GENERATION_PARAMS.seed,
+    targetPlatforms:
+      partial.targetPlatforms ?? [...DEFAULT_GENERATION_PARAMS.targetPlatforms],
   };
 }
 

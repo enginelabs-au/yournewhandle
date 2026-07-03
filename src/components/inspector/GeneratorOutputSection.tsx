@@ -10,6 +10,7 @@ type GeneratorOutputSectionProps = {
   selectedCandidateId: string | null;
   onSelectCandidate: (candidate: Candidate) => void;
   isGenerating: boolean;
+  isRandomizing?: boolean;
   error: string | null;
   onGenerate: () => void;
   canGenerate: boolean;
@@ -21,12 +22,14 @@ export function GeneratorOutputSection({
   selectedCandidateId,
   onSelectCandidate,
   isGenerating,
+  isRandomizing = false,
   error,
   onGenerate,
   canGenerate,
   showGenerateButton = true,
 }: GeneratorOutputSectionProps) {
   const { t } = useAppPreferences();
+  const isBusy = isGenerating || isRandomizing;
 
   return (
     <div className="flex flex-col gap-3">
@@ -35,19 +38,27 @@ export function GeneratorOutputSection({
           type="button"
           onClick={onGenerate}
           disabled={!canGenerate}
-          aria-busy={isGenerating}
+          aria-busy={isBusy}
           className="gen-generate-btn flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isGenerating ? (
+          {isBusy ? (
             <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
           ) : (
             <Sparkles className="h-4 w-4" aria-hidden />
           )}
-          {isGenerating ? t("generating") : t("generateHandles")}
+          {isRandomizing
+            ? "Randomizing settings…"
+            : isGenerating
+              ? t("generating")
+              : t("generateHandles")}
         </button>
       ) : null}
 
-      <div className="gen-results-zone rounded-xl p-3">
+      <div
+        className={`gen-results-zone rounded-xl p-3 transition ${
+          isBusy ? "gen-results-zone-active" : ""
+        }`}
+      >
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="gen-output-label text-[11px] font-bold uppercase tracking-widest">
             {t("output")}
@@ -68,6 +79,7 @@ export function GeneratorOutputSection({
           selectedCandidateId={selectedCandidateId}
           onSelect={onSelectCandidate}
           isGenerating={isGenerating}
+          isRandomizing={isRandomizing}
         />
       </div>
     </div>

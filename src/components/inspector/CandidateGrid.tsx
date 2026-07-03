@@ -9,6 +9,7 @@ type CandidateGridProps = {
   selectedCandidateId: string | null;
   onSelect: (candidate: Candidate) => void;
   isGenerating: boolean;
+  isRandomizing?: boolean;
 };
 
 export function CandidateGrid({
@@ -16,12 +17,19 @@ export function CandidateGrid({
   selectedCandidateId,
   onSelect,
   isGenerating,
+  isRandomizing = false,
 }: CandidateGridProps) {
   const { t } = useAppPreferences();
+  const showLoading = isGenerating || isRandomizing;
 
-  if (isGenerating && candidates.length === 0) {
+  if (showLoading && candidates.length === 0) {
     return (
       <div className="space-y-2">
+        <p className="text-center text-[11px] text-dr-muted">
+          {isRandomizing
+            ? "Shuffling matrix settings…"
+            : t("generating")}
+        </p>
         {Array.from({ length: 4 }, (_, index) => (
           <div
             key={index}

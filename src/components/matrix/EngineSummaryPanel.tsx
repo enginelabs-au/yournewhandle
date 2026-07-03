@@ -3,7 +3,7 @@
 import type { GenerationParams } from "@/lib/types";
 import { LANGUAGE_IDS } from "@/lib/types";
 import { LANGUAGE_LABELS } from "@/lib/matrix-validation";
-import { MatrixSection } from "@/components/ui/matrix-controls";
+import { getEffectiveLengthBounds } from "@/lib/engine/resolve-params";
 
 type EngineSummaryPanelProps = {
   params: GenerationParams;
@@ -16,15 +16,26 @@ export function EngineSummaryPanel({ params }: EngineSummaryPanelProps) {
   const dictChars = Math.floor(params.maxLen * (params.dictionaryWeight / 100));
   const phoneticChars = params.maxLen - dictChars;
   const isTicker = params.minLen <= 4 && params.maxLen <= 4;
+  const effective = getEffectiveLengthBounds(params);
 
   return (
-    <MatrixSection title="Engine preview">
-      <div className="space-y-2 rounded-lg border border-dr-border bg-dr-panel-2/50 p-3 font-mono text-[11px] leading-relaxed text-dr-muted">
+    <div className="space-y-2 rounded-lg border border-dr-border bg-dr-panel-2/50 p-3 font-mono text-[11px] leading-relaxed text-dr-muted">
         <Row label="Mode" value={params.mode} />
         <Row
           label="Length"
-          value={`${params.minLen}–${params.maxLen} chars`}
+          value={
+            effective.platformConstrained
+              ? `${effective.minLen}–${effective.maxLen} (platform)`
+              : `${params.minLen}–${params.maxLen} chars`
+          }
         />
+        {params.seed ? <Row label="Seed" value={params.seed} /> : null}
+        {params.targetPlatforms.length > 0 ? (
+          <Row
+            label="Platforms"
+            value={params.targetPlatforms.join(", ")}
+          />
+        ) : null}
         {params.mode === "phonetic" ? (
           <>
             <Row
@@ -66,6 +77,43 @@ export function EngineSummaryPanel({ params }: EngineSummaryPanelProps) {
         )}
         {params.prefix ? <Row label="Prefix lock" value={params.prefix} /> : null}
         {params.suffix ? <Row label="Suffix lock" value={params.suffix} /> : null}
+        {params.mode === "phonetic" ? (
+          <>
+            <Row label="Mood" value={params.moodVector} />
+            <Row label="Vowel harmony" value={params.vowelHarmony} />
+            <Row label="Ending style" value={params.endingStyle} />
+            {params.affixTier !== "off" ? (
+              <Row
+                label="Affix"
+                value={`${params.affixTier} (${params.affixPlacement})`}
+              />
+            ) : null}
+            {params.blueprint !== "dynamic" ? (
+              <Row label="Blueprint" value={params.blueprint.toUpperCase()} />
+            ) : null}
+            {params.aestheticStrictness > 0 ? (
+              <Row
+                label="Strictness"
+                value={
+                  params.aestheticStrictness === 2 ? "strict" : "loose"
+                }
+              />
+            ) : null}
+            {params.phoneticEcho ? (
+              <Row label="Phonetic echo" value={params.echoType} />
+            ) : null}
+            {params.strictMora ? <Row label="Strict mora" value="on" /> : null}
+            {params.blendOverlap ? (
+              <Row label="Blend overlap" value="on" />
+            ) : null}
+            {params.clutterGuard ? (
+              <Row label="Clutter guard" value="on" />
+            ) : null}
+            {params.filterCollisions ? (
+              <Row label="Uniqueness filter" value="on" />
+            ) : null}
+          </>
+        ) : null}
         <Row label="Casing" value={params.casing} />
         <Row label="Batch" value={`${params.batchSize} handles`} />
         {isTicker ? (
@@ -74,7 +122,6 @@ export function EngineSummaryPanel({ params }: EngineSummaryPanelProps) {
           </p>
         ) : null}
       </div>
-    </MatrixSection>
   );
 }
 

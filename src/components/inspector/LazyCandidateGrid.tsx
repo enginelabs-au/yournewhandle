@@ -27,6 +27,7 @@ type LazyCandidateGridProps = {
   selectedCandidateId: string | null;
   onSelect: (candidate: Candidate) => void;
   isGenerating: boolean;
+  isRandomizing?: boolean;
 };
 
 export function LazyCandidateGrid(props: LazyCandidateGridProps) {

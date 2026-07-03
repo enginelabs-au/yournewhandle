@@ -14,12 +14,13 @@ import { useChecker } from "@/hooks/useChecker";
 import { useWorkflowPipeline } from "@/hooks/useWorkflowPipeline";
 import { getMatrixErrors } from "@/lib/matrix-validation";
 import { normalizeHandleForCheck } from "@/lib/checker/constants";
-import type { Candidate } from "@/lib/types";
+import type { Candidate, GenerationParams } from "@/lib/types";
 import { useState } from "react";
 
 export function Dashboard() {
-  const { candidates, isGenerating, error, generate } = useGenerateCandidates();
-  const { params, updateParams, hydrated } = useGenerationParams();
+  const { candidates, isGenerating, error, generate, setAiCandidates } =
+    useGenerateCandidates();
+  const { params, updateParams, setParams, hydrated } = useGenerationParams();
   const {
     selectedHandle,
     selectedCandidateId,
@@ -48,17 +49,24 @@ export function Dashboard() {
     selectHandle,
   });
 
+  const [isRandomizing, setIsRandomizing] = useState(false);
+
   const canGenerate =
-    getMatrixErrors(params).length === 0 && !isGenerating && !pipelineRunning;
+    getMatrixErrors(params).length === 0 &&
+    !isGenerating &&
+    !pipelineRunning &&
+    !isRandomizing;
 
   const isGenerateFirst = direction === "generate-check";
   const canRunPipeline =
     !pipelineRunning &&
+    !isRandomizing &&
     (isGenerateFirst
       ? canGenerate
       : Boolean(normalizeHandleForCheck(checkDraft.trim())));
 
-  const handleGenerate = () => generate(params);
+  const handleGenerate = (overrideParams?: GenerationParams) =>
+    generate(overrideParams ?? params);
 
   const handleSelectCandidate = (candidate: Candidate) => {
     selectHandle(candidate.normalized, candidate.id);
@@ -68,6 +76,15 @@ export function Dashboard() {
   const handleManualCheck = (handle: string) => {
     setCheckDraft(handle);
     selectHandle(handle, null);
+  };
+
+  const handlePolishApply = (handle: string) => {
+    setCheckDraft(handle);
+    selectHandle(handle, null);
+  };
+
+  const handleAiResults = (handles: string[]) => {
+    setAiCandidates(handles, params.mode);
   };
 
   if (!hydrated) {
@@ -125,12 +142,17 @@ export function Dashboard() {
               <GeneratorColumn
                 params={params}
                 onParamsChange={updateParams}
+                onApplyConfig={setParams}
                 onGenerate={handleGenerate}
+                onRandomizingChange={setIsRandomizing}
                 canGenerate={canGenerate}
                 isGenerating={isGenerating}
+                isRandomizing={isRandomizing}
                 candidates={candidates}
                 selectedCandidateId={selectedCandidateId}
                 onSelectCandidate={handleSelectCandidate}
+                onPolishApply={handlePolishApply}
+                onAiResults={handleAiResults}
                 error={error}
               />
             </div>

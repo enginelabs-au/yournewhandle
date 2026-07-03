@@ -1,4 +1,5 @@
 import type { GenerationParams } from "@/lib/types";
+import { blendCompoundParts } from "./blend";
 import { applyPrefixSuffix } from "./constraints";
 import { buildWordCore, fitToLengthRange } from "./phonetic";
 
@@ -26,7 +27,9 @@ export function buildCompoundHandle(params: GenerationParams): string | null {
       continue;
     }
 
-    const combined = `${partA}${partB}`;
+    const combined = params.blendOverlap
+      ? blendCompoundParts(partA, partB)
+      : `${partA}${partB}`;
     const withAffixes = applyPrefixSuffix(
       combined,
       params.prefix,

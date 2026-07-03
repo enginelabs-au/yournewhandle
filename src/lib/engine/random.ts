@@ -1,7 +1,34 @@
 /** Shared RNG helpers for handle generation (not crypto-grade; aesthetic output only). */
 
+import {
+  createSeededRandom,
+  normalizeSeed,
+} from "./seeded-rng";
+
+let seededRandom: ReturnType<typeof createSeededRandom> | null = null;
+
+export function initSeededRng(seed: string | null | undefined): void {
+  const normalized = normalizeSeed(seed);
+  seededRandom = normalized ? createSeededRandom(normalized) : null;
+}
+
+export function clearSeededRng(): void {
+  seededRandom = null;
+}
+
+export function isSeededRngActive(): boolean {
+  return seededRandom !== null;
+}
+
+function randomFloat(): number {
+  return seededRandom ? seededRandom() : Math.random();
+}
+
 export function randomInt(max: number): number {
-  return Math.floor(Math.random() * max);
+  if (max <= 0) {
+    return 0;
+  }
+  return Math.floor(randomFloat() * max);
 }
 
 export function pickRandom<T>(items: readonly T[]): T {
@@ -13,7 +40,7 @@ export function randomBetween(min: number, max: number): number {
 }
 
 export function randomChance(probability: number): boolean {
-  return Math.random() < probability;
+  return randomFloat() < probability;
 }
 
 export function shuffle<T>(items: readonly T[]): T[] {
@@ -31,3 +58,5 @@ export function createCandidateId(): string {
   }
   return `${Date.now()}-${randomInt(1_000_000)}`;
 }
+
+export { randomSeedString, normalizeSeed } from "./seeded-rng";

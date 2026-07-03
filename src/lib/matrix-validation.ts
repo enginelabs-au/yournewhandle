@@ -5,6 +5,7 @@ import {
   type LanguageId,
 } from "@/lib/types";
 import { constraintsSatisfiable } from "@/lib/engine/constraints";
+import { platformLengthConflict } from "@/lib/engine/resolve-params";
 import {
   LENGTH_INPUT_MAX,
   LENGTH_INPUT_MIN,
@@ -73,6 +74,11 @@ export function getMatrixErrors(params: GenerationParams): string[] {
 
   if (params.suffix && !/^[a-zA-Z]*$/.test(params.suffix)) {
     errors.push("Suffix must use letters only.");
+  }
+
+  const platformError = platformLengthConflict(params);
+  if (platformError) {
+    errors.push(platformError);
   }
 
   return errors;

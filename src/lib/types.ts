@@ -13,6 +13,22 @@ export type CheckStatus =
 
 export type Casing = "lower" | "title" | "upper";
 
+export type VowelHarmony = "off" | "front" | "back" | "neutral";
+
+export type EndingStyle = "sharp" | "soft" | "liquid";
+
+export type MoodVector = "default" | "ethereal" | "brutalist" | "playful";
+
+export type AffixTier = "off" | "tech" | "premium" | "classical" | "creative";
+
+export type AffixPlacement = "prefix" | "suffix" | "auto";
+
+export type Blueprint = "dynamic" | "cvcvc" | "vcvcv" | "cvccv";
+
+export type EchoType = "consonant" | "vowel";
+
+export type AestheticStrictness = 0 | 1 | 2;
+
 export interface PhonemePool {
   onsets: readonly string[];
   nuclei: readonly string[];
@@ -34,6 +50,34 @@ export interface GenerationParams {
   blockedConsonants: string[];
   batchSize: number;
   casing: Casing;
+  /** AESTH-01: restrict vowel classes across syllables */
+  vowelHarmony: VowelHarmony;
+  /** AESTH-06: collapse boundary overlap in compound mode */
+  blendOverlap: boolean;
+  /** AESTH-08: final syllable coda character */
+  endingStyle: EndingStyle;
+  /** AESTH-15: reject triple consonants and awkward digraphs */
+  clutterGuard: boolean;
+  /** AESTH-14: 0=off, 1=loose, 2=strict bigram scoring filter */
+  aestheticStrictness: AestheticStrictness;
+  /** AESTH-05: startup-style affix injection */
+  affixTier: AffixTier;
+  affixPlacement: AffixPlacement;
+  /** AESTH-09–11: semantic phoneme biasing */
+  moodVector: MoodVector;
+  /** AESTH-03: alliteration / assonance linker */
+  phoneticEcho: boolean;
+  echoType: EchoType;
+  /** AESTH-07: fixed CV slot templates */
+  blueprint: Blueprint;
+  /** AESTH-13: Japanese mora constraints */
+  strictMora: boolean;
+  /** AESTH-16: reject top common English words */
+  filterCollisions: boolean;
+  /** AESTH-18: reproducible batch when set */
+  seed: string | null;
+  /** AESTH-17: intersect length with platform username limits */
+  targetPlatforms: string[];
 }
 
 export interface Candidate {
@@ -92,4 +136,19 @@ export const DEFAULT_GENERATION_PARAMS: GenerationParams = {
   blockedConsonants: [],
   batchSize: 24,
   casing: "lower",
+  vowelHarmony: "off",
+  blendOverlap: false,
+  endingStyle: "sharp",
+  clutterGuard: false,
+  aestheticStrictness: 0,
+  affixTier: "off",
+  affixPlacement: "auto",
+  moodVector: "default",
+  phoneticEcho: false,
+  echoType: "consonant",
+  blueprint: "dynamic",
+  strictMora: false,
+  filterCollisions: false,
+  seed: null,
+  targetPlatforms: [],
 };

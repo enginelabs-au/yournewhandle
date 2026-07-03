@@ -2,7 +2,29 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { generateBatch } from "@/lib/engine/generate";
+import { createCandidateId } from "@/lib/engine/random";
 import type { Candidate, GenerationParams } from "@/lib/types";
+
+function toCandidates(handles: string[], mode: GenerationParams["mode"]): Candidate[] {
+  const seen = new Set<string>();
+  const results: Candidate[] = [];
+
+  for (const raw of handles) {
+    const normalized = raw.toLowerCase();
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    results.push({
+      id: createCandidateId(),
+      handle: raw,
+      normalized,
+      mode,
+    });
+  }
+
+  return results;
+}
 
 export function useGenerateCandidates() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -39,6 +61,7 @@ export function useGenerateCandidates() {
 
   const generate = useCallback((params: GenerationParams) => {
     setError(null);
+    setCandidates([]);
     setIsGenerating(true);
 
     if (workerRef.current) {
@@ -56,5 +79,35 @@ export function useGenerateCandidates() {
     }
   }, []);
 
-  return { candidates, isGenerating, error, generate };
+  const setAiCandidates = useCallback(
+    (handles: string[], mode?: GenerationParams["mode"]) => {
+      setError(null);
+      setCandidates(toCandidates(handles, mode ?? "phonetic"));
+    },
+    [],
+  );
+
+  const appendAiCandidates = useCallback(
+    (handles: string[], mode?: GenerationParams["mode"]) => {
+      setError(null);
+      const resolvedMode = mode ?? "phonetic";
+      setCandidates((prev) => {
+        const existing = new Set(prev.map((c) => c.normalized));
+        const incoming = toCandidates(handles, resolvedMode).filter(
+          (c) => !existing.has(c.normalized),
+        );
+        return [...incoming, ...prev];
+      });
+    },
+    [],
+  );
+
+  return {
+    candidates,
+    isGenerating,
+    error,
+    generate,
+    setAiCandidates,
+    appendAiCandidates,
+  };
 }
