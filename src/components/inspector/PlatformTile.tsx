@@ -16,10 +16,13 @@ const TILE_GLOW: Record<CheckStatus, string> = {
   error: "check-tile-taken",
 };
 
-const STATUS_KEY: Record<CheckStatus, "statusPending" | "statusFree" | "statusTaken" | "statusUnknown"> = {
+const STATUS_KEY: Record<
+  CheckStatus,
+  "statusPending" | "statusAvailable" | "statusTaken" | "statusUnknown"
+> = {
   idle: "statusPending",
   loading: "statusPending",
-  available: "statusFree",
+  available: "statusAvailable",
   taken: "statusTaken",
   unknown: "statusUnknown",
   verify: "statusUnknown",
@@ -37,6 +40,7 @@ export function PlatformTile({ platform, index = 0 }: PlatformTileProps) {
   const isLive = platform.status === "loading";
   const statusLabel =
     platform.status === "loading" ? "…" : t(STATUS_KEY[platform.status]);
+  const showStatusText = platform.status !== "loading";
 
   return (
     <article
@@ -74,7 +78,7 @@ export function PlatformTile({ platform, index = 0 }: PlatformTileProps) {
           ) : (
             <HelpCircle className="h-2.5 w-2.5" aria-hidden />
           )}
-          {statusLabel}
+          {showStatusText ? statusLabel : null}
         </span>
 
         {platform.latencyMs !== undefined ? (

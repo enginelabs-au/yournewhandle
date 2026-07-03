@@ -36,7 +36,7 @@ export function CandidateCard({
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.02, duration: 0.2 }}
-      className={`gen-candidate-card group flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition ${
+      className={`gen-candidate-card group flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 transition ${
         selected ? "gen-candidate-card-selected" : ""
       }`}
     >
@@ -49,6 +49,7 @@ export function CandidateCard({
       >
         {candidate.handle}
       </button>
+
       <button
         type="button"
         onClick={handleCopy}

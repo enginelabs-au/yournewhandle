@@ -35,7 +35,7 @@ export function CheckerStats({ report }: CheckerStatsProps) {
     { label: t("free"), value: available, className: "text-emerald-300", dot: "bg-emerald-400", glow: "shadow-emerald-500/30" },
     { label: t("taken"), value: taken, className: "text-rose-300", dot: "bg-rose-400", glow: "shadow-rose-500/30" },
     {
-      label: t("other"),
+      label: t("unknown"),
       value: report.isRunning ? "—" : unknown,
       className: "text-amber-300",
       dot: "bg-amber-400",

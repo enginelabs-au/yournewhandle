@@ -11,6 +11,16 @@ export function buildGeminiSystemPrompt(params: GenerationParams): string {
     .map((id) => `${id} ${params.languageWeights[id]}%`)
     .join(", ");
 
+  const exactLength =
+    effective.minLen === effective.maxLen
+      ? `EXACTLY ${effective.minLen} characters each`
+      : `${effective.minLen}–${effective.maxLen} characters each`;
+
+  const longHandleHint =
+    effective.maxLen > 14
+      ? "\n- For long handles: concatenate 3–6 short pronounceable parts (e.g. pixelwaveforge, lunarkitecho). Real dictionary words are optional."
+      : "";
+
   return `You are the creative engine for yournewhandle.com — an aesthetic phonetic username generator.
 
 Your job: produce unique, pronounceable, brand-quality handles that obey the user's creative brief AND the technical matrix below.
@@ -19,12 +29,12 @@ Your job: produce unique, pronounceable, brand-quality handles that obey the use
 - Readable, memorable, word-like handles (Notion, Figma, Spotify energy)
 - NOT passwords, NOT leetspeak, NOT random character soup
 - Prefer rhythmic consonant-vowel flow and startup-brand feel
-- Avoid common English dictionary words as standalone handles
+- Compound/portmanteau handles are encouraged${longHandleHint}
 
 ## Active generation matrix (binding constraints)
 - Mode: ${params.mode}
-- Length: ${effective.minLen}–${effective.maxLen} characters (effective; respect platform overlap)
-- User length slider: ${params.minLen}–${params.maxLen}
+- Required length: ${exactLength}
+- User length setting: ${params.minLen}–${params.maxLen}
 - Syllables: ${params.syllableCount.min}–${params.syllableCount.max}
 - Casing output style: ${params.casing}
 - Dictionary blend: ${params.dictionaryWeight}%
@@ -49,24 +59,39 @@ Your job: produce unique, pronounceable, brand-quality handles that obey the use
 - Target platforms: ${params.targetPlatforms.length ? params.targetPlatforms.join(", ") : "(none)"}
 - Batch size requested: ${params.batchSize}
 
-## Output rules
-- Return ONLY handles, one per line
-- Lowercase a-z and 0-9 only; must start with a letter
-- Every handle MUST fit length ${effective.minLen}–${effective.maxLen}
+## Output rules (strict)
+- Return ONLY handles, one per line, plain text
+- Lowercase a-z and 0-9 only; every handle MUST start with a letter
+- Every handle MUST be ${exactLength} — count characters before responding
 - Honor prefix "${params.prefix}" and suffix "${params.suffix}" when set
-- No explanations, numbering, bullets, or punctuation
+- NO numbering, NO bullets, NO labels, NO markdown, NO explanations
+- NO punctuation except when required by prefix/suffix
 - Each line must be a distinct handle`;
 }
 
 export function buildGeminiUserPrompt(
   userPrompt: string,
+  params: GenerationParams,
   referenceHandle?: string | null,
   count?: number,
 ): string {
+  const effective = getEffectiveLengthBounds(params);
   const lines = [
     `Creative brief: ${userPrompt.trim()}`,
     count ? `Generate exactly ${count} unique handles.` : "Generate unique handles.",
+    effective.minLen === effective.maxLen
+      ? `Each handle must be exactly ${effective.minLen} characters.`
+      : `Each handle must be between ${effective.minLen} and ${effective.maxLen} characters.`,
   ];
+
+  if (effective.maxLen > 14) {
+    lines.push(
+      "Use concatenated word parts to reach the required length (not single short words).",
+    );
+  }
+
+  lines.push("Reply with handles only — one handle per line, no numbering.");
+
   if (referenceHandle) {
     lines.push(
       `Optional reference handle (vary from this, do not copy): ${referenceHandle}`,

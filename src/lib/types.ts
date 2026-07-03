@@ -118,10 +118,10 @@ export const DEFAULT_ALLOWED_VOWELS = [
 
 export const DEFAULT_GENERATION_PARAMS: GenerationParams = {
   mode: "phonetic",
-  minLen: 5,
+  minLen: 4,
   maxLen: 10,
   syllableCount: { min: 2, max: 2 },
-  dictionaryWeight: 0,
+  dictionaryWeight: 85,
   entropy: 50,
   languageWeights: {
     english: 100,
@@ -129,7 +129,7 @@ export const DEFAULT_GENERATION_PARAMS: GenerationParams = {
     latin: 0,
     japanese: 0,
   },
-  compound: false,
+  compound: true,
   prefix: "",
   suffix: "",
   allowedVowels: [...DEFAULT_ALLOWED_VOWELS],

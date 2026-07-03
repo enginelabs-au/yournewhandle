@@ -2,7 +2,7 @@ import type { Candidate, GenerationParams } from "@/lib/types";
 import { applyCasing, constraintsSatisfiable } from "./constraints";
 import { buildAffixHandle } from "./affix-handle";
 import { buildBlueprintHandle } from "./blueprint";
-import { buildCompoundHandle } from "./compound";
+import { buildCompoundHandle, buildLongCompoundHandle, isLongHandleTarget } from "./compound";
 import { buildDictionaryHandle } from "./dictionary";
 import { buildPhoneticHandle } from "./phonetic";
 import { PhonotacticRuleEngine } from "./phonotactic";
@@ -19,12 +19,18 @@ import {
 } from "./scoring";
 
 function generateRawHandle(params: GenerationParams): string | null {
-  if (params.mode === "dictionary") {
-    return buildDictionaryHandle(params);
+  if (isLongHandleTarget(params)) {
+    const longHandle = buildLongCompoundHandle(params);
+    if (longHandle) {
+      return longHandle;
+    }
   }
 
-  if (params.dictionaryWeight > 0 && params.dictionaryWeight < 100) {
-    return buildDictionaryHandle(params);
+  if (params.mode === "dictionary" || params.dictionaryWeight > 0 || params.compound) {
+    const dictionary = buildDictionaryHandle(params);
+    if (dictionary) {
+      return dictionary;
+    }
   }
 
   if (params.blueprint !== "dynamic") {
@@ -41,10 +47,7 @@ function generateRawHandle(params: GenerationParams): string | null {
     }
   }
 
-  if (
-    params.compound ||
-    (params.syllableCount.min >= 2 && params.minLen > 4)
-  ) {
+  if (params.compound || params.minLen > 4) {
     const compound = buildCompoundHandle(params);
     if (compound) {
       return compound;
@@ -63,8 +66,9 @@ export function generateOne(
   }
 
   const scoreFloor = minScoreThreshold(params);
+  const maxAttempts = generateAttemptsForParams(params);
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const raw = generateRawHandle(params);
     if (!raw) {
       continue;
@@ -92,6 +96,10 @@ export function generateOne(
   return null;
 }
 
+function generateAttemptsForParams(params: GenerationParams): number {
+  return params.maxLen > 20 ? 12 : params.maxLen > 14 ? 8 : 5;
+}
+
 export function generateBatch(params: GenerationParams): Candidate[] {
   initSeededRng(params.seed);
   try {
@@ -101,8 +109,12 @@ export function generateBatch(params: GenerationParams): Candidate[] {
     const ruleEngine = new PhonotacticRuleEngine(effective);
     const strictnessMultiplier =
       effective.aestheticStrictness > 0 || effective.filterCollisions ? 10 : 5;
+    const lengthFactor =
+      effective.maxLen > 20 ? 4 : effective.maxLen > 14 ? 2 : 1;
     const maxAttempts =
-      effective.batchSize * (effective.clutterGuard ? 8 : strictnessMultiplier);
+      effective.batchSize *
+      (effective.clutterGuard ? 8 : strictnessMultiplier) *
+      lengthFactor;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (results.length >= effective.batchSize) {

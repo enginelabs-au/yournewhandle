@@ -212,7 +212,10 @@ export function fitToLengthRange(
     }
   }
 
-  for (let pad = 0; pad < 2 && result.length < minLen; pad += 1) {
+  const padGap = Math.max(0, minLen - result.length);
+  const maxPadAttempts = Math.min(16, Math.max(2, Math.ceil(padGap / 2) + 1));
+
+  for (let pad = 0; pad < maxPadAttempts && result.length < minLen; pad += 1) {
     const lang = params.strictMora
       ? "japanese"
       : selectLanguageForSyllable(pad, params.languageWeights);
@@ -234,9 +237,17 @@ export function buildWordCore(
   params: GenerationParams,
   syllableTarget?: number,
 ): string | null {
-  const syllableCount = isTickerMode(params)
+  const avgTarget = Math.floor((params.minLen + params.maxLen) / 2);
+  let syllableCount = isTickerMode(params)
     ? 1
     : (syllableTarget ?? resolveSyllableCount(params));
+
+  if (!syllableTarget && !isTickerMode(params) && avgTarget > 10) {
+    syllableCount = Math.min(
+      12,
+      Math.max(syllableCount, Math.ceil(avgTarget / 3.5)),
+    );
+  }
 
   const syllables: string[] = [];
   const syllableContext: SyllableBuildContext = {

@@ -2,6 +2,7 @@
 
 import type { PlatformCheckResult } from "@/lib/checker/report-types";
 import type { CheckStatus } from "@/lib/types";
+import { PlatformIcon } from "@/components/ui/PlatformIcon";
 import { Check, ExternalLink, HelpCircle, Loader2, X } from "lucide-react";
 
 const STATUS_STYLES: Record<
@@ -10,11 +11,11 @@ const STATUS_STYLES: Record<
 > = {
   idle: { label: "Pending", bar: "bg-zinc-600", text: "text-zinc-400", bg: "bg-zinc-800/40" },
   loading: { label: "Checking", bar: "bg-sky-400", text: "text-sky-300", bg: "bg-sky-950/40" },
-  available: { label: "Free", bar: "bg-emerald-400", text: "text-emerald-300", bg: "bg-emerald-950/35" },
+  available: { label: "Available", bar: "bg-emerald-400", text: "text-emerald-300", bg: "bg-emerald-950/35" },
   taken: { label: "Taken", bar: "bg-rose-400", text: "text-rose-300", bg: "bg-rose-950/35" },
   unknown: { label: "Unknown", bar: "bg-amber-400", text: "text-amber-300", bg: "bg-amber-950/35" },
-  verify: { label: "Verify", bar: "bg-amber-400", text: "text-amber-300", bg: "bg-amber-950/35" },
-  error: { label: "Error", bar: "bg-rose-400", text: "text-rose-300", bg: "bg-rose-950/35" },
+  verify: { label: "Unknown", bar: "bg-amber-400", text: "text-amber-300", bg: "bg-amber-950/35" },
+  error: { label: "Taken", bar: "bg-rose-400", text: "text-rose-300", bg: "bg-rose-950/35" },
 };
 
 type PlatformListRowProps = {
@@ -33,11 +34,15 @@ export function PlatformListRow({ platform, index = 0 }: PlatformListRowProps) {
     >
       <div className={`check-list-bar ${style.bar}`} aria-hidden />
 
-      <div
-        className="check-list-icon shrink-0"
-        style={{ backgroundColor: platform.color }}
-      >
-        {platform.abbr}
+      <div className="check-list-icon shrink-0">
+        <PlatformIcon
+          slug={platform.iconSlug}
+          color={platform.color}
+          abbr={platform.abbr}
+          name={platform.name}
+          size={32}
+          className="rounded-lg"
+        />
       </div>
 
       <div className="min-w-0 flex-1">

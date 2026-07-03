@@ -6,7 +6,9 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import type { PipelineStep, WorkflowDirection } from "@/hooks/useWorkflowPipeline";
+import type { WorkflowDirection } from "@/hooks/useWorkflowDirection";
+
+type PipelineStep = "idle" | "generating" | "checking" | "suggesting";
 
 type WorkflowConnectorProps = {
   direction: WorkflowDirection;

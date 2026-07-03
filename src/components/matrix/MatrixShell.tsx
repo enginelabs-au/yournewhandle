@@ -22,17 +22,22 @@ import { AestheticControlsPanel } from "@/components/matrix/AestheticControlsPan
 import { PipelineControlsPanel } from "@/components/matrix/PipelineControlsPanel";
 import { EngineSummaryPanel } from "@/components/matrix/EngineSummaryPanel";
 import { MatrixAccordion } from "@/components/matrix/MatrixAccordion";
+import { useAppPreferences } from "@/context/AppPreferencesProvider";
 
 type MatrixShellProps = {
   params: GenerationParams;
   onParamsChange: (patch: Partial<GenerationParams>) => void;
   onApplyConfig: (params: GenerationParams) => void;
   onGenerate: (params?: GenerationParams) => void;
+  onCustomGenerate?: () => void;
   onScrollToOutput?: () => void;
   onRandomizingChange?: (active: boolean) => void;
   isGenerating: boolean;
   embedded?: boolean;
   controlsOnly?: boolean;
+  shufflePresetId?: string | null;
+  onStopPipeline?: () => void;
+  pipelineRunning?: boolean;
 };
 
 export function MatrixShell({
@@ -40,13 +45,19 @@ export function MatrixShell({
   onParamsChange,
   onApplyConfig,
   onGenerate,
+  onCustomGenerate,
   onScrollToOutput,
   onRandomizingChange,
   isGenerating,
   embedded = false,
   controlsOnly = false,
+  shufflePresetId: shufflePresetIdProp = null,
+  onStopPipeline,
+  pipelineRunning = false,
 }: MatrixShellProps) {
-  const [shufflePresetId, setShufflePresetId] = useState<string | null>(null);
+  const { t } = useAppPreferences();
+  const [shufflePresetIdLocal, setShufflePresetIdLocal] = useState<string | null>(null);
+  const shufflePresetId = shufflePresetIdProp ?? shufflePresetIdLocal;
   const [isRandomizing, setIsRandomizing] = useState(false);
   const errors = getMatrixErrors(params);
   const canGenerate = errors.length === 0 && !isGenerating && !isRandomizing;
@@ -70,7 +81,8 @@ export function MatrixShell({
         onGenerate={onGenerate}
         onScrollToOutput={onScrollToOutput}
         onRandomizingChange={handleRandomizingChange}
-        onShufflePresetChange={setShufflePresetId}
+        onShufflePresetChange={setShufflePresetIdLocal}
+        onStop={onStopPipeline}
       />
 
       <MatrixAccordion
@@ -168,6 +180,8 @@ export function MatrixShell({
     isRandomizing || shufflePresetId ? "matrix-randomize-active" : "";
 
   if (embedded) {
+    const runCustomGenerate = onCustomGenerate ?? (() => onGenerate());
+
     return (
       <div className="flex h-full flex-col">
         <div
@@ -176,17 +190,27 @@ export function MatrixShell({
           {controls}
         </div>
         {!controlsOnly ? (
-          <footer className="shrink-0 border-t border-dr-border p-4">
-            <button
-              type="button"
-              onClick={() => onGenerate()}
-              disabled={!canGenerate}
-              aria-busy={isGenerating}
-              className="btn-neon-generate flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Sparkles className="h-4 w-4" aria-hidden />
-              {isGenerating ? "Generating…" : "Generate Handles"}
-            </button>
+          <footer className="gen-studio-divider shrink-0 border-t p-4">
+            {pipelineRunning && onStopPipeline ? (
+              <button
+                type="button"
+                onClick={onStopPipeline}
+                className="dr-btn-stop flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
+              >
+                {t("stop")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={runCustomGenerate}
+                disabled={!canGenerate}
+                aria-busy={isGenerating}
+                className="btn-neon-generate flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden />
+                {isGenerating ? t("generating") : t("customGenerate")}
+              </button>
+            )}
           </footer>
         ) : null}
       </div>
@@ -214,13 +238,13 @@ export function MatrixShell({
       <footer className="border-t border-dr-border p-5">
         <button
           type="button"
-          onClick={() => onGenerate()}
+          onClick={() => (onCustomGenerate ?? (() => onGenerate()))()}
           disabled={!canGenerate}
           aria-busy={isGenerating}
           className="btn-neon-generate flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Sparkles className="h-4 w-4" aria-hidden />
-          {isGenerating ? "Generating…" : "Generate"}
+          {isGenerating ? t("generating") : t("customGenerate")}
         </button>
       </footer>
     </aside>

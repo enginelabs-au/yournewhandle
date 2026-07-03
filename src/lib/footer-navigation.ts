@@ -76,7 +76,7 @@ export const FOOTER_COLUMNS: FooterColumn[] = [
     accent: "blue",
     icon: "users",
     viewAllHref: "/#checker",
-    links: platformsInCategory("Social"),
+    links: platformsInCategory("Social Media"),
   },
   {
     id: "video-gaming",
@@ -85,7 +85,7 @@ export const FOOTER_COLUMNS: FooterColumn[] = [
     icon: "video",
     viewAllHref: "/#checker",
     links: [
-      ...platformsInCategory("Video", 3),
+      ...platformsInCategory("Video & Streaming", 3),
       ...platformsInCategory("Gaming", 2),
     ],
   },
@@ -96,7 +96,7 @@ export const FOOTER_COLUMNS: FooterColumn[] = [
     icon: "code",
     viewAllHref: "/#checker",
     links: [
-      ...platformsInCategory("Coding", 3),
+      ...platformsInCategory("Developer", 3),
       ...platformsInCategory("Professional", 2),
     ],
   },
@@ -107,9 +107,9 @@ export const FOOTER_COLUMNS: FooterColumn[] = [
     icon: "music",
     viewAllHref: "/#checker",
     links: [
-      ...platformsInCategory("Music", 2),
+      ...platformsInCategory("Music & Audio", 2),
       ...platformsInCategory("Messaging", 2),
-      ...platformsInCategory("Other", 1),
+      ...platformsInCategory("Community", 1),
     ],
   },
 ];

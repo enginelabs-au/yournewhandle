@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Loader2, Shuffle } from "lucide-react";
+import { Loader2, Shuffle, Square } from "lucide-react";
 import type { GenerationParams } from "@/lib/types";
 import {
   buildPresetShuffleFrames,
@@ -10,13 +10,22 @@ import {
   pickUniqueRandomConfiguration,
   type ConfigurationSummary,
 } from "@/lib/randomize-config";
+import { useAppPreferences } from "@/context/AppPreferencesProvider";
 
 const SHUFFLE_FRAME_MS = 95;
 const LOCK_IN_MS = 350;
 
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const id = window.setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(id);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
   });
 }
 
@@ -26,6 +35,7 @@ type RandomizeMatrixButtonProps = {
   onScrollToOutput?: () => void;
   onRandomizingChange?: (active: boolean) => void;
   onShufflePresetChange?: (presetId: string | null) => void;
+  onStop?: () => void;
 };
 
 export function RandomizeMatrixButton({
@@ -34,13 +44,16 @@ export function RandomizeMatrixButton({
   onScrollToOutput,
   onRandomizingChange,
   onShufflePresetChange,
+  onStop,
 }: RandomizeMatrixButtonProps) {
+  const { t } = useAppPreferences();
   const [phase, setPhase] = useState<"idle" | "shuffling" | "locked">("idle");
   const [tickerLabel, setTickerLabel] = useState<string | null>(null);
   const [shufflePresetId, setShufflePresetId] = useState<string | null>(null);
   const [summary, setSummary] = useState<ConfigurationSummary | null>(null);
   const [poolNote, setPoolNote] = useState<string | null>(null);
   const runningRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const setRandomizing = useCallback(
     (active: boolean) => {
@@ -49,10 +62,20 @@ export function RandomizeMatrixButton({
     [onRandomizingChange],
   );
 
+  const handleStop = () => {
+    abortRef.current?.abort();
+    onStop?.();
+  };
+
   const handleRandomize = async () => {
     if (runningRef.current) {
       return;
     }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     runningRef.current = true;
     setRandomizing(true);
     setPhase("shuffling");
@@ -65,11 +88,18 @@ export function RandomizeMatrixButton({
 
     try {
       for (const preset of frames) {
+        if (controller.signal.aborted) {
+          return;
+        }
         setShufflePresetId(preset.id);
         onShufflePresetChange?.(preset.id);
         setTickerLabel(preset.label);
         onApplyConfig(mergeToFullParams(preset.patch));
-        await wait(SHUFFLE_FRAME_MS);
+        await wait(SHUFFLE_FRAME_MS, controller.signal);
+      }
+
+      if (controller.signal.aborted) {
+        return;
       }
 
       setPhase("locked");
@@ -85,16 +115,28 @@ export function RandomizeMatrixButton({
           : null,
       );
 
-      await wait(LOCK_IN_MS);
+      await wait(LOCK_IN_MS, controller.signal);
+
+      if (controller.signal.aborted) {
+        return;
+      }
 
       onScrollToOutput?.();
       onGenerate(finalParams);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      throw error;
     } finally {
       setPhase("idle");
       setShufflePresetId(null);
       onShufflePresetChange?.(null);
       setRandomizing(false);
       runningRef.current = false;
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
     }
   };
 
@@ -109,24 +151,25 @@ export function RandomizeMatrixButton({
       }`}
       data-shuffle-preset={shufflePresetId ?? undefined}
     >
-      <button
-        type="button"
-        onClick={handleRandomize}
-        disabled={isAnimating}
-        aria-busy={isAnimating}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-dr-purple-light/40 bg-dr-purple/10 px-4 py-3 text-sm font-semibold text-dr-purple-light transition hover:border-dr-purple-light/70 hover:bg-dr-purple/20 disabled:cursor-wait disabled:opacity-80"
-      >
-        {isAnimating ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
+      {isAnimating ? (
+        <button
+          type="button"
+          onClick={handleStop}
+          className="dr-btn-stop flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
+        >
+          <Square className="h-4 w-4 fill-current" aria-hidden />
+          {t("stop")}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleRandomize}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-dr-purple-light/40 bg-dr-purple/10 px-4 py-3 text-sm font-semibold text-dr-purple-light transition hover:border-dr-purple-light/70 hover:bg-dr-purple/20"
+        >
           <Shuffle className="h-4 w-4" aria-hidden />
-        )}
-        {phase === "shuffling"
-          ? "Randomizing…"
-          : phase === "locked"
-            ? "Generating handles…"
-            : "Randomize matrix"}
-      </button>
+          Randomize matrix
+        </button>
+      )}
 
       {isAnimating || summary ? (
         <div
@@ -142,7 +185,14 @@ export function RandomizeMatrixButton({
               phase === "shuffling" ? "randomize-ticker-flash" : ""
             }`}
           >
-            {tickerLabel ?? "—"}
+            {isAnimating ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                {tickerLabel ?? "—"}
+              </span>
+            ) : (
+              (tickerLabel ?? "—")
+            )}
           </p>
           {summary ? (
             <div className="mt-2 flex flex-wrap gap-1.5">

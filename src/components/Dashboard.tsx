@@ -8,18 +8,30 @@ import { StudioZoneLabel } from "@/components/layout/StudioZoneLabel";
 import { CheckerColumn } from "@/components/inspector/CheckerColumn";
 import { GeneratorColumn } from "@/components/inspector/GeneratorColumn";
 import { InspectorErrorBoundary } from "@/components/inspector/InspectorErrorBoundary";
+import { useBatchAvailability } from "@/hooks/useBatchAvailability";
 import { useGenerateCandidates } from "@/hooks/useGenerateCandidates";
 import { useGenerationParams } from "@/hooks/useGenerationParams";
 import { useChecker } from "@/hooks/useChecker";
-import { useWorkflowPipeline } from "@/hooks/useWorkflowPipeline";
+import { useRandomizeGenerate } from "@/hooks/useRandomizeGenerate";
+import { useWorkflowDirection } from "@/hooks/useWorkflowDirection";
+import {
+  WORKFLOW_LENGTH_MIN,
+  clampLengthForWorkflow,
+} from "@/lib/length-bounds";
 import { getMatrixErrors } from "@/lib/matrix-validation";
-import { normalizeHandleForCheck } from "@/lib/checker/constants";
+import type { CheckMode } from "@/lib/platforms-registry";
 import type { Candidate, GenerationParams } from "@/lib/types";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function Dashboard() {
-  const { candidates, isGenerating, error, generate, setAiCandidates } =
-    useGenerateCandidates();
+  const {
+    candidates,
+    isGenerating,
+    error,
+    generate,
+    cancelGenerate,
+    setAiCandidates,
+  } = useGenerateCandidates();
   const { params, updateParams, setParams, hydrated } = useGenerationParams();
   const {
     selectedHandle,
@@ -31,56 +43,169 @@ export function Dashboard() {
   } = useChecker();
 
   const [checkDraft, setCheckDraft] = useState("");
+  const [generateSelectedId, setGenerateSelectedId] = useState<string | null>(
+    null,
+  );
+  const [isRandomizing, setIsRandomizing] = useState(false);
+  const [shufflePresetId, setShufflePresetId] = useState<string | null>(null);
+  const pendingBatchCheck = useRef(false);
+  const [lengthHardLock, setLengthHardLock] = useState(true);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    try {
+      const stored = localStorage.getItem("ynh:length-hard-lock");
+      if (stored === "0") {
+        setLengthHardLock(false);
+        if (params.minLen === params.maxLen) {
+          updateParams({
+            minLen: WORKFLOW_LENGTH_MIN,
+            maxLen: clampLengthForWorkflow(params.maxLen),
+          });
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [hydrated, params.maxLen, params.minLen, updateParams]);
 
   const {
     direction,
+    activeZone,
     flipDirection,
+    selectCheckZone,
+    selectGenerateZone,
     focusCheck,
-    runPipeline,
-    pipelineStep,
-    pipelineRunning,
-  } = useWorkflowPipeline({
-    checkDraft,
-    candidates,
-    isGenerating,
-    report,
-    params,
-    generate,
-    selectHandle,
+  } = useWorkflowDirection();
+
+  const {
+    isBatchChecking,
+    batchCandidates,
+    batchProgress,
+    batchPlatformResults,
+    checkCandidatesBatch,
+    cancelBatchCheck,
+    clearAvailability,
+  } = useBatchAvailability({ onFocusCheck: focusCheck });
+
+  const handleGenerate = useCallback(
+    (overrideParams?: GenerationParams) => {
+      clearAvailability();
+      generate(overrideParams ?? params);
+    },
+    [clearAvailability, generate, params],
+  );
+
+  const {
+    runRandomizeAndGenerate,
+    cancelRandomize,
+    isRandomizing: randomizingActive,
+  } = useRandomizeGenerate({
+    onApplyConfig: setParams,
+    onGenerate: handleGenerate,
+    onRandomizingChange: setIsRandomizing,
+    onShufflePresetChange: setShufflePresetId,
+    getLengthConstraint: () =>
+      lengthHardLock
+        ? { minLen: params.minLen, maxLen: params.maxLen }
+        : undefined,
   });
 
-  const [isRandomizing, setIsRandomizing] = useState(false);
+  const isRandomizingAny = isRandomizing || randomizingActive;
+
+  const handleGenerateAndCheck = useCallback(async () => {
+    clearAvailability();
+    pendingBatchCheck.current = true;
+    await runRandomizeAndGenerate();
+  }, [clearAvailability, runRandomizeAndGenerate]);
+
+  useEffect(() => {
+    if (!pendingBatchCheck.current || isGenerating || isRandomizingAny) {
+      return;
+    }
+    if (candidates.length === 0) {
+      pendingBatchCheck.current = false;
+      return;
+    }
+    pendingBatchCheck.current = false;
+    setGenerateSelectedId(null);
+    void checkCandidatesBatch(candidates);
+  }, [candidates, checkCandidatesBatch, isGenerating, isRandomizingAny]);
+
+  const pipelineRunning =
+    isGenerating || isRandomizingAny || isBatchChecking;
+
+  const handleStopPipeline = useCallback(() => {
+    pendingBatchCheck.current = false;
+    cancelRandomize();
+    cancelGenerate();
+    cancelBatchCheck();
+    stopChecks();
+  }, [cancelBatchCheck, cancelGenerate, cancelRandomize, stopChecks]);
+
+  const handleLengthHardLockChange = useCallback(
+    (locked: boolean) => {
+      setLengthHardLock(locked);
+      try {
+        localStorage.setItem("ynh:length-hard-lock", locked ? "1" : "0");
+      } catch {
+        // ignore storage errors
+      }
+      const len = clampLengthForWorkflow(params.maxLen);
+      if (locked) {
+        updateParams({ minLen: len, maxLen: len });
+      } else {
+        updateParams({ minLen: WORKFLOW_LENGTH_MIN, maxLen: len });
+      }
+    },
+    [params.maxLen, updateParams],
+  );
+
+  const handleLengthChange = useCallback(
+    (length: number) => {
+      const len = clampLengthForWorkflow(length);
+      if (lengthHardLock) {
+        updateParams({ minLen: len, maxLen: len });
+      } else {
+        updateParams({ minLen: WORKFLOW_LENGTH_MIN, maxLen: len });
+      }
+    },
+    [lengthHardLock, updateParams],
+  );
 
   const canGenerate =
-    getMatrixErrors(params).length === 0 &&
-    !isGenerating &&
-    !pipelineRunning &&
-    !isRandomizing;
+    getMatrixErrors(params).length === 0 && !pipelineRunning;
 
-  const isGenerateFirst = direction === "generate-check";
-  const canRunPipeline =
-    !pipelineRunning &&
-    !isRandomizing &&
-    (isGenerateFirst
-      ? canGenerate
-      : Boolean(normalizeHandleForCheck(checkDraft.trim())));
-
-  const handleGenerate = (overrideParams?: GenerationParams) =>
-    generate(overrideParams ?? params);
+  const isCheckActive = activeZone === "check";
+  const showBatchCheckUi = batchCandidates.length > 0;
 
   const handleSelectCandidate = (candidate: Candidate) => {
-    selectHandle(candidate.normalized, candidate.id);
-    setCheckDraft(candidate.normalized);
+    setGenerateSelectedId(candidate.id);
+
+    if (showBatchCheckUi && !isBatchChecking) {
+      clearAvailability();
+      selectHandle(candidate.normalized, candidate.id, "light");
+      setCheckDraft(candidate.normalized);
+      return;
+    }
+
+    if (!showBatchCheckUi) {
+      selectHandle(candidate.normalized, candidate.id, "light");
+      setCheckDraft(candidate.normalized);
+    }
   };
 
-  const handleManualCheck = (handle: string) => {
+  const handleManualCheck = (handle: string, mode: CheckMode = "light") => {
+    clearAvailability();
     setCheckDraft(handle);
-    selectHandle(handle, null);
+    selectHandle(handle, null, mode);
   };
 
   const handlePolishApply = (handle: string) => {
     setCheckDraft(handle);
-    selectHandle(handle, null);
+    selectHandle(handle, null, "light");
   };
 
   const handleAiResults = (handles: string[]) => {
@@ -101,55 +226,81 @@ export function Dashboard() {
       <DnsRobotHeader />
 
       <main className="mx-auto w-full max-w-[1680px] flex-1 px-4 py-6 lg:px-6 lg:py-8">
-        <RotatingPlatformHero />
+        <RotatingPlatformHero params={params} />
 
         <InspectorErrorBoundary>
           <WorkflowSubheading
             direction={direction}
+            activeZone={activeZone}
+            onSelectZone={(zone) =>
+              zone === "check" ? selectCheckZone() : selectGenerateZone()
+            }
             onFlip={flipDirection}
-            onRunPipeline={runPipeline}
-            pipelineRunning={pipelineRunning}
-            canRunPipeline={canRunPipeline}
+            onGenerateAndCheck={() => void handleGenerateAndCheck()}
+            onStop={handleStopPipeline}
+            isRunning={pipelineRunning}
+            canRun={canGenerate}
+            handleLength={params.maxLen}
+            lengthHardLock={lengthHardLock}
+            onLengthHardLockChange={handleLengthHardLockChange}
+            onLengthChange={handleLengthChange}
           />
 
           <div className="studio-grid grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start md:gap-5 lg:gap-6">
             <div
               className={`studio-column panel-enter-left min-w-0 ${
-                !isGenerateFirst ? "studio-column-active" : "studio-column-idle"
+                isCheckActive ? "studio-column-active" : "studio-column-idle"
               }`}
+              onPointerDown={selectCheckZone}
             >
-              <StudioZoneLabel zone="check" direction={direction} />
+              <StudioZoneLabel zone="check" />
               <CheckerColumn
                 selectedHandle={selectedHandle}
                 report={report}
                 checkDraft={checkDraft}
                 onCheckDraftChange={setCheckDraft}
                 onSubmit={handleManualCheck}
-                onStop={stopChecks}
+                onStop={
+                  showBatchCheckUi && isBatchChecking
+                    ? handleStopPipeline
+                    : stopChecks
+                }
                 onRetry={rerunChecks}
                 onInputFocus={focusCheck}
-                disabled={isGenerating || pipelineRunning}
-                pipelineActive={pipelineStep === "checking"}
+                disabled={isGenerating || isRandomizingAny}
+                pipelineActive={isBatchChecking}
+                batchCandidates={batchCandidates}
+                batchPlatformResults={batchPlatformResults}
+                batchProgress={batchProgress}
+                isBatchChecking={isBatchChecking}
               />
             </div>
 
             <div
               className={`studio-column panel-enter-right min-w-0 ${
-                isGenerateFirst ? "studio-column-active" : "studio-column-idle"
+                !isCheckActive ? "studio-column-active" : "studio-column-idle"
               }`}
+              onPointerDown={selectGenerateZone}
             >
-              <StudioZoneLabel zone="generate" direction={direction} />
+              <StudioZoneLabel zone="generate" />
               <GeneratorColumn
                 params={params}
                 onParamsChange={updateParams}
                 onApplyConfig={setParams}
                 onGenerate={handleGenerate}
+                onGenerateAndCheck={() => void handleGenerateAndCheck()}
+                onStopPipeline={handleStopPipeline}
                 onRandomizingChange={setIsRandomizing}
+                shufflePresetId={shufflePresetId}
                 canGenerate={canGenerate}
                 isGenerating={isGenerating}
-                isRandomizing={isRandomizing}
+                isRandomizing={isRandomizingAny}
+                isBatchChecking={isBatchChecking}
+                pipelineRunning={pipelineRunning}
                 candidates={candidates}
-                selectedCandidateId={selectedCandidateId}
+                selectedCandidateId={
+                  generateSelectedId ?? selectedCandidateId
+                }
                 onSelectCandidate={handleSelectCandidate}
                 onPolishApply={handlePolishApply}
                 onAiResults={handleAiResults}

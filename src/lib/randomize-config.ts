@@ -132,6 +132,33 @@ export function mergeToFullParams(
   };
 }
 
+export type LengthConstraint = {
+  minLen: number;
+  maxLen: number;
+};
+
+/** Pin min/max length and keep syllable count compatible with the range. */
+export function applyLengthConstraint(
+  params: GenerationParams,
+  constraint: LengthConstraint,
+): GenerationParams {
+  const minLen = constraint.minLen;
+  const maxLen = Math.max(minLen, constraint.maxLen);
+  const cap = minLen <= 4 ? 1 : maxLen <= 6 ? 2 : 4;
+  const syllableMin = Math.min(params.syllableCount.min, cap);
+  const syllableMax = Math.min(Math.max(syllableMin, params.syllableCount.max), cap);
+
+  return {
+    ...params,
+    minLen,
+    maxLen,
+    syllableCount: {
+      min: syllableMin,
+      max: Math.max(syllableMin, syllableMax),
+    },
+  };
+}
+
 export function configFingerprint(params: GenerationParams): string {
   const canonical = {
     ...params,
@@ -235,10 +262,27 @@ function randomSeed(): string {
   return result;
 }
 
-function mutateParams(base: GenerationParams): GenerationParams {
+function applyWordCompoundBias(params: GenerationParams): GenerationParams {
+  if (params.strictMora || params.mode === "dictionary") {
+    return params;
+  }
+
+  let next = { ...params, compound: true };
+
+  if (next.dictionaryWeight < 60) {
+    next.dictionaryWeight = pick([65, 75, 85, 95, 100]);
+  }
+
+  return next;
+}
+
+function mutateParams(
+  base: GenerationParams,
+  options?: { lockLength?: boolean },
+): GenerationParams {
   let params = { ...base };
 
-  if (chance(0.35)) {
+  if (!options?.lockLength && chance(0.35)) {
     const [minLen, maxLen] = pick(LENGTH_PAIRS);
     params = { ...params, minLen, maxLen };
   }
@@ -273,12 +317,16 @@ function mutateParams(base: GenerationParams): GenerationParams {
     if (chance(0.2)) {
       params = { ...params, blueprint: pick(BLUEPRINTS) };
     }
-    if (chance(0.25)) {
+    if (chance(0.08)) {
       params = {
         ...params,
-        compound: !params.compound,
-        blendOverlap: chance(0.5),
+        compound: false,
+        blendOverlap: false,
       };
+    } else if (!params.compound) {
+      params = { ...params, compound: true, blendOverlap: chance(0.35) };
+    } else if (chance(0.35)) {
+      params = { ...params, blendOverlap: !params.blendOverlap };
     }
     if (chance(0.2)) {
       params = {
@@ -297,10 +345,10 @@ function mutateParams(base: GenerationParams): GenerationParams {
         };
       }
     }
-    if (chance(0.25) && params.dictionaryWeight === 0) {
+    if (params.dictionaryWeight < 60 && chance(0.85)) {
       params = {
         ...params,
-        dictionaryWeight: pick([10, 20, 30, 40, 50]),
+        dictionaryWeight: pick([65, 75, 85, 95, 100]),
       };
     }
   }
@@ -347,33 +395,34 @@ function mutateParams(base: GenerationParams): GenerationParams {
     params = { ...params, dictionaryWeight: 100, compound: false };
   }
 
-  params = applyBlueprintLengthRules(params);
+  params = options?.lockLength ? params : applyBlueprintLengthRules(params);
 
   if (params.minLen > params.maxLen) {
     params = { ...params, maxLen: params.minLen };
   }
 
-  return params;
+  return applyWordCompoundBias(params);
 }
 
-function buildCandidateConfig(): GenerationParams {
+function buildCandidateConfig(options?: { lockLength?: boolean }): GenerationParams {
   const preset: GeneratorPreset = pick(ALL_GENERATOR_PRESETS);
   let params = mergeToFullParams(preset.patch);
   const mutationPasses = randInt(3) + 1;
   for (let i = 0; i < mutationPasses; i += 1) {
-    params = mutateParams(params);
+    params = mutateParams(params, options);
   }
 
   if (chance(0.12)) {
-    const mode: GenerationMode = chance(0.85) ? "phonetic" : "dictionary";
+    const mode: GenerationMode = chance(0.35) ? "dictionary" : "phonetic";
     params = mergeToFullParams({
       ...params,
       mode,
-      dictionaryWeight: mode === "dictionary" ? 100 : params.dictionaryWeight,
+      dictionaryWeight: mode === "dictionary" ? 100 : Math.max(params.dictionaryWeight, 75),
+      compound: true,
     });
   }
 
-  return params;
+  return applyWordCompoundBias(params);
 }
 
 export type RandomizeResult = {
@@ -468,12 +517,22 @@ export function describeConfiguration(
   };
 }
 
-export function pickUniqueRandomConfiguration(): RandomizeResult {
+export function pickUniqueRandomConfiguration(options?: {
+  lengthConstraint?: LengthConstraint;
+}): RandomizeResult {
+  const lockLength = Boolean(options?.lengthConstraint);
+  const buildOptions = { lockLength };
+
+  const finalize = (params: GenerationParams): GenerationParams =>
+    options?.lengthConstraint
+      ? applyLengthConstraint(params, options.lengthConstraint)
+      : params;
+
   let used = loadUsedConfigFingerprints();
   let poolReset = false;
 
   for (let attempt = 0; attempt < MAX_PICK_ATTEMPTS; attempt += 1) {
-    const params = buildCandidateConfig();
+    let params = finalize(buildCandidateConfig(buildOptions));
     if (!isMatrixValid(params)) {
       continue;
     }
@@ -489,7 +548,7 @@ export function pickUniqueRandomConfiguration(): RandomizeResult {
   used = new Set();
 
   for (let attempt = 0; attempt < MAX_PICK_ATTEMPTS; attempt += 1) {
-    const params = buildCandidateConfig();
+    let params = finalize(buildCandidateConfig(buildOptions));
     if (!isMatrixValid(params)) {
       continue;
     }
@@ -500,7 +559,7 @@ export function pickUniqueRandomConfiguration(): RandomizeResult {
     }
   }
 
-  const fallback = mergeToFullParams(pick(ALL_GENERATOR_PRESETS).patch);
+  let fallback = finalize(mergeToFullParams(pick(ALL_GENERATOR_PRESETS).patch));
   const fingerprint = configFingerprint(fallback);
   rememberConfigFingerprint(fingerprint);
   return { params: fallback, fingerprint, poolReset: true };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   cancelChecker,
   runChecker,
@@ -8,19 +8,30 @@ import {
   loadingReport,
   type CheckReport,
 } from "@/lib/checker/orchestrator";
-import { PLATFORM_REGISTRY } from "@/lib/platforms-registry";
+import {
+  platformCountForCheckMode,
+  type CheckMode,
+} from "@/lib/platforms-registry";
 
 export function useChecker() {
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [checkMode, setCheckMode] = useState<CheckMode>("light");
   const [report, setReport] = useState<CheckReport | null>(null);
+  const checkModeRef = useRef<CheckMode>("light");
 
   const selectHandle = useCallback(
-    (handle: string, candidateId: string | null = null) => {
+    (
+      handle: string,
+      candidateId: string | null = null,
+      mode: CheckMode = "light",
+    ) => {
+      checkModeRef.current = mode;
+      setCheckMode(mode);
       setSelectedHandle(handle);
       setSelectedCandidateId(candidateId);
-      setReport(loadingReport(handle, PLATFORM_REGISTRY.length));
-      runChecker(handle, setReport);
+      setReport(loadingReport(handle, platformCountForCheckMode(mode), mode));
+      runChecker(handle, setReport, mode);
     },
     [],
   );
@@ -43,14 +54,15 @@ export function useChecker() {
 
   const rerunChecks = useCallback(() => {
     if (selectedHandle) {
-      runChecker(selectedHandle, setReport);
+      runChecker(selectedHandle, setReport, checkModeRef.current);
     }
   }, [selectedHandle]);
 
   return {
     selectedHandle,
     selectedCandidateId,
-    report: report ?? (selectedHandle ? emptyReport(selectedHandle) : null),
+    checkMode,
+    report: report ?? (selectedHandle ? emptyReport(selectedHandle, checkMode) : null),
     selectHandle,
     stopChecks,
     clearSelection,

@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  serverExternalPackages: ["impit"],
 };
 
 export default nextConfig;

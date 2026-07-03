@@ -3,7 +3,7 @@
 import type { Candidate } from "@/lib/types";
 import { LazyCandidateGrid } from "@/components/inspector/LazyCandidateGrid";
 import { useAppPreferences } from "@/context/AppPreferencesProvider";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw, Shuffle, Square } from "lucide-react";
 
 type GeneratorOutputSectionProps = {
   candidates: Candidate[];
@@ -11,10 +11,13 @@ type GeneratorOutputSectionProps = {
   onSelectCandidate: (candidate: Candidate) => void;
   isGenerating: boolean;
   isRandomizing?: boolean;
+  isBatchChecking?: boolean;
+  pipelineRunning?: boolean;
   error: string | null;
-  onGenerate: () => void;
+  onGenerateRandomlyAndCheck: () => void;
+  onStopPipeline?: () => void;
   canGenerate: boolean;
-  showGenerateButton?: boolean;
+  showGenerateButtons?: boolean;
 };
 
 export function GeneratorOutputSection({
@@ -23,35 +26,53 @@ export function GeneratorOutputSection({
   onSelectCandidate,
   isGenerating,
   isRandomizing = false,
+  isBatchChecking = false,
+  pipelineRunning = false,
   error,
-  onGenerate,
+  onGenerateRandomlyAndCheck,
+  onStopPipeline,
   canGenerate,
-  showGenerateButton = true,
+  showGenerateButtons = true,
 }: GeneratorOutputSectionProps) {
   const { t } = useAppPreferences();
-  const isBusy = isGenerating || isRandomizing;
+  const isBusy = pipelineRunning || isGenerating || isRandomizing || isBatchChecking;
 
   return (
     <div className="flex flex-col gap-3">
-      {showGenerateButton ? (
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={!canGenerate}
-          aria-busy={isBusy}
-          className="gen-generate-btn flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isBusy ? (
-            <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Sparkles className="h-4 w-4" aria-hidden />
-          )}
+      {showGenerateButtons ? (
+        isBusy && onStopPipeline ? (
+          <button
+            type="button"
+            onClick={onStopPipeline}
+            className="dr-btn-stop flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-bold"
+          >
+            <Square className="h-4 w-4 fill-current" aria-hidden />
+            {t("stop")}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onGenerateRandomlyAndCheck}
+            disabled={!canGenerate}
+            className="gen-generate-random-check-btn flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-dr-purple-light/45 bg-gradient-to-r from-dr-purple/20 to-cyan-950/35 px-4 py-3.5 text-sm font-bold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Shuffle className="h-4 w-4 text-dr-purple-light" aria-hidden />
+            {t("generateRandomlyAndCheck")}
+          </button>
+        )
+      ) : null}
+
+      {isBusy && !onStopPipeline ? (
+        <p className="flex items-center justify-center gap-2 text-center text-[11px] text-dr-muted">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden />
           {isRandomizing
-            ? "Randomizing settings…"
+            ? t("randomizing")
             : isGenerating
               ? t("generating")
-              : t("generateHandles")}
-        </button>
+              : isBatchChecking
+                ? t("checkingBatch")
+                : t("running")}
+        </p>
       ) : null}
 
       <div

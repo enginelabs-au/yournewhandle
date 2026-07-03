@@ -31,6 +31,7 @@ export function useGenerateCandidates() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
+  const generationIdRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -44,13 +45,21 @@ export function useGenerateCandidates() {
     const worker = workerRef.current;
 
     worker.onmessage = (event: MessageEvent<{ candidates: Candidate[] }>) => {
+      if (generationIdRef.current === 0) {
+        return;
+      }
       setCandidates(event.data.candidates);
       setIsGenerating(false);
+      generationIdRef.current = 0;
     };
 
     worker.onerror = () => {
+      if (generationIdRef.current === 0) {
+        return;
+      }
       setError("Generation worker failed");
       setIsGenerating(false);
+      generationIdRef.current = 0;
     };
 
     return () => {
@@ -59,9 +68,15 @@ export function useGenerateCandidates() {
     };
   }, []);
 
+  const cancelGenerate = useCallback(() => {
+    generationIdRef.current = 0;
+    setIsGenerating(false);
+  }, []);
+
   const generate = useCallback((params: GenerationParams) => {
     setError(null);
     setCandidates([]);
+    generationIdRef.current += 1;
     setIsGenerating(true);
 
     if (workerRef.current) {
@@ -76,6 +91,7 @@ export function useGenerateCandidates() {
       setError("Generation failed");
     } finally {
       setIsGenerating(false);
+      generationIdRef.current = 0;
     }
   }, []);
 
@@ -107,6 +123,7 @@ export function useGenerateCandidates() {
     isGenerating,
     error,
     generate,
+    cancelGenerate,
     setAiCandidates,
     appendAiCandidates,
   };

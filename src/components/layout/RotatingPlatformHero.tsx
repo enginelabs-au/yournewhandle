@@ -1,41 +1,89 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check } from "lucide-react";
 import { useAppPreferences } from "@/context/AppPreferencesProvider";
-import { HERO_COOL_HANDLES } from "@/lib/hero-handles";
+import { generateHeroHandle } from "@/lib/hero-generate";
 import { PLATFORM_COUNT } from "@/lib/platforms-registry";
+import type { GenerationParams } from "@/lib/types";
 
 const ROTATE_MS = 2600;
 
-export function RotatingPlatformHero() {
+type RotatingPlatformHeroProps = {
+  params: GenerationParams;
+};
+
+export function RotatingPlatformHero({ params }: RotatingPlatformHeroProps) {
   const { t } = useAppPreferences();
-  const [index, setIndex] = useState(0);
+  const [handle, setHandle] = useState("");
   const [animating, setAnimating] = useState(false);
 
+  const heroParams = useMemo(
+    () => ({
+      ...params,
+      batchSize: 1,
+      aestheticStrictness: 0 as const,
+      filterCollisions: false,
+    }),
+    [
+      params.affixPlacement,
+      params.affixTier,
+      params.allowedVowels,
+      params.batchSize,
+      params.blockedConsonants,
+      params.blendOverlap,
+      params.blueprint,
+      params.casing,
+      params.clutterGuard,
+      params.compound,
+      params.dictionaryWeight,
+      params.echoType,
+      params.endingStyle,
+      params.entropy,
+      params.languageWeights,
+      params.maxLen,
+      params.minLen,
+      params.mode,
+      params.moodVector,
+      params.phoneticEcho,
+      params.prefix,
+      params.strictMora,
+      params.suffix,
+      params.syllableCount,
+      params.targetPlatforms,
+      params.vowelHarmony,
+    ],
+  );
+
+  const nextHandle = useCallback(() => generateHeroHandle(heroParams), [heroParams]);
+
   useEffect(() => {
-    const interval = setInterval(() => {
+    setHandle(nextHandle());
+  }, [nextHandle]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
       setAnimating(true);
       window.setTimeout(() => {
-        setIndex((current) => (current + 1) % HERO_COOL_HANDLES.length);
+        setHandle(nextHandle());
         setAnimating(false);
       }, 280);
     }, ROTATE_MS);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => window.clearInterval(interval);
+  }, [nextHandle]);
 
-  const handle = HERO_COOL_HANDLES[index]!;
+  const displayHandle = handle || nextHandle();
 
   return (
     <div className="hero-section mb-4 animate-fade-in-up">
       <h1 className="hero-title mx-auto flex max-w-3xl flex-col items-center gap-3 text-center">
         <span className="hero-platform-slot inline-flex overflow-hidden font-mono text-2xl font-bold sm:text-3xl lg:text-[2.35rem]">
           <span
-            key={handle}
+            key={displayHandle}
             className={`hero-platform-word dr-title-gradient whitespace-nowrap ${animating ? "hero-platform-out" : "hero-platform-in"}`}
           >
-            {handle}
+            {displayHandle}
           </span>
         </span>
 

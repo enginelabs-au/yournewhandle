@@ -1101,11 +1101,13 @@ input[type="range"].neon-slider::-webkit-slider-thumb {
   animation: platform-card-enter 0.4s ease both, platform-live-pulse 1.5s ease-in-out infinite;
 }
 
-.check-tile-status.status-available { color: #6ee7b7; }
-.check-tile-status.status-taken { color: #fda4af; }
+.check-tile-status.status-available { color: #34d399; }
+.check-tile-status.status-taken { color: #fb7185; }
+.check-tile-status.status-error { color: #fb7185; }
 .check-tile-status.status-loading { color: #67e8f9; }
 .check-tile-status.status-idle { color: #94a3b8; }
-.check-tile-status.status-unknown { color: #fcd34d; }
+.check-tile-status.status-unknown { color: #fbbf24; }
+.check-tile-status.status-verify { color: #fbbf24; }
 
 .hero-section {
   text-align: center;
@@ -1162,6 +1164,176 @@ input[type="range"].neon-slider::-webkit-slider-thumb {
   color: #67e8f9;
   border-color: rgb(34 211 238 / 0.45);
   background: rgb(34 211 238 / 0.12);
+}
+
+.check-category-stack {
+  padding-bottom: 0.25rem;
+}
+
+.check-category-section {
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  background: rgb(8 12 20 / 0.55);
+}
+
+.check-category-header {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.check-category-header:not(.check-category-header-static):hover {
+  background: rgb(255 255 255 / 0.03);
+}
+
+.check-category-header-static {
+  cursor: default;
+}
+
+.check-category-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a5f3fc;
+}
+
+.check-category-count {
+  display: inline-flex;
+  min-width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(0 0 0 / 0.25);
+}
+
+.check-category-live-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 9999px;
+  background: #22d3ee;
+  box-shadow: 0 0 8px rgb(34 211 238 / 0.7);
+  animation: platform-live-pulse 1.5s ease-in-out infinite;
+}
+
+.check-category-subtitle {
+  font-size: 0.68rem;
+  color: rgb(148 163 184 / 0.9);
+}
+
+.check-category-chevron {
+  margin-top: 0.15rem;
+  height: 0.95rem;
+  width: 0.95rem;
+  flex-shrink: 0;
+  color: rgb(148 163 184 / 0.85);
+  transition: transform 0.2s ease;
+}
+
+.check-category-pills {
+  margin-top: 0.125rem;
+}
+
+.check-category-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.check-category-pill-free {
+  color: #6ee7b7;
+  background: rgb(6 78 59 / 0.35);
+  border: 1px solid rgb(52 211 153 / 0.25);
+}
+
+.check-category-pill-taken {
+  color: #fda4af;
+  background: rgb(76 5 25 / 0.35);
+  border: 1px solid rgb(251 113 133 / 0.25);
+}
+
+.check-category-pill-loading {
+  color: #67e8f9;
+  background: rgb(8 47 73 / 0.45);
+  border: 1px solid rgb(34 211 238 / 0.25);
+}
+
+.check-category-pill-other {
+  color: #fcd34d;
+  background: rgb(69 26 3 / 0.35);
+  border: 1px solid rgb(251 191 36 / 0.25);
+}
+
+.candidate-availability-available {
+  color: #34d399;
+  background: rgb(6 78 59 / 0.35);
+  border: 1px solid rgb(52 211 153 / 0.25);
+}
+
+.candidate-availability-taken,
+.candidate-availability-error {
+  color: #fb7185;
+  background: rgb(76 5 25 / 0.35);
+  border: 1px solid rgb(251 113 133 / 0.25);
+}
+
+.candidate-availability-unknown,
+.candidate-availability-verify {
+  color: #fbbf24;
+  background: rgb(69 26 3 / 0.35);
+  border: 1px solid rgb(251 191 36 / 0.25);
+}
+
+.candidate-availability-loading {
+  color: #67e8f9;
+  background: rgb(8 47 73 / 0.35);
+  border: 1px solid rgb(34 211 238 / 0.25);
+}
+
+.dr-btn-deep-check:hover:not(:disabled) {
+  border-color: rgb(34 211 238 / 0.55);
+  background: rgb(34 211 238 / 0.12);
+}
+
+.gen-generate-check-btn:hover:not(:disabled) {
+  border-color: rgb(34 211 238 / 0.55);
+  background: rgb(34 211 238 / 0.18);
+}
+
+.gen-generate-random-check-btn:hover:not(:disabled) {
+  border-color: rgb(192 132 252 / 0.65);
+  background: linear-gradient(
+    90deg,
+    rgb(88 28 135 / 0.28),
+    rgb(8 47 73 / 0.45)
+  );
+}
+
+.gen-generate-random-btn:hover:not(:disabled) {
+  border-color: rgb(192 132 252 / 0.65);
+  background: rgb(88 28 135 / 0.25);
+}
+
+.check-category-body {
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+  padding: 0.75rem;
 }
 
 .check-action-chip {
@@ -1415,7 +1587,41 @@ input[type="range"].neon-slider::-webkit-slider-thumb {
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  transition: color 0.35s ease, text-shadow 0.35s ease;
+  transition:
+    color 0.35s ease,
+    text-shadow 0.35s ease,
+    opacity 0.35s ease,
+    filter 0.35s ease;
+}
+
+.workflow-sub-slot-btn {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+}
+
+.workflow-sub-slot-btn:not(.workflow-sub-slot-active) {
+  opacity: 0.45;
+  filter: saturate(0.65);
+}
+
+.workflow-sub-slot-btn:not(.workflow-sub-slot-active):hover {
+  opacity: 0.72;
+  filter: saturate(0.85);
+}
+
+.workflow-sub-slot-active.workflow-sub-check {
+  text-shadow:
+    0 0 14px rgb(34 211 238 / 0.85),
+    0 0 32px rgb(34 211 238 / 0.45);
+}
+
+.workflow-sub-slot-active.workflow-sub-gen {
+  text-shadow:
+    0 0 14px rgb(167 139 250 / 0.85),
+    0 0 32px rgb(167 139 250 / 0.45);
 }
 
 @media (min-width: 640px) {

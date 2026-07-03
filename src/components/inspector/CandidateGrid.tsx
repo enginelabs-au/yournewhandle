@@ -50,7 +50,7 @@ export function CandidateGrid({
   }
 
   return (
-    <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+    <div className="candidate-grid-scroll max-h-[29rem] min-h-[29rem] space-y-2 overflow-y-auto pr-1">
       {candidates.map((candidate, index) => (
         <CandidateCard
           key={candidate.id}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { GenerationParams } from "@/lib/types";
+import { generateBatch } from "@/lib/engine/generate";
 import {
   buildGeminiSystemPrompt,
   buildGeminiUserPrompt,
@@ -12,10 +13,93 @@ function geminiModel(): string {
   return process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
 }
 
-function handlePattern(minLen: number, maxLen: number): RegExp {
-  const minBody = Math.max(1, minLen - 1);
+function unwrapModelText(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+  return trimmed;
+}
+
+function stripLineDecorators(line: string): string {
+  return line
+    .trim()
+    .replace(/^[\s>*#]+/, "")
+    .replace(/^\d+[\.\)\:\-]\s*/, "")
+    .replace(/^[-*•]+\s*/, "")
+    .trim();
+}
+
+function normalizeHandleToken(raw: string): string {
+  return raw.replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+
+function isValidHandle(
+  handle: string,
+  minLen: number,
+  maxLen: number,
+): boolean {
+  if (handle.length < minLen || handle.length > maxLen) {
+    return false;
+  }
+  return /^[a-z][a-z0-9]*$/.test(handle);
+}
+
+function applyAffixes(
+  handle: string,
+  prefix: string,
+  suffix: string,
+): string {
+  let result = handle;
+  if (prefix && !result.startsWith(prefix.toLowerCase())) {
+    result = prefix.toLowerCase() + result;
+  }
+  if (suffix && !result.endsWith(suffix.toLowerCase())) {
+    result = result + suffix.toLowerCase();
+  }
+  return result;
+}
+
+function extractHandleCandidates(text: string, minLen: number, maxLen: number): string[] {
+  const unwrapped = unwrapModelText(text);
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (token: string) => {
+    const normalized = normalizeHandleToken(token);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  for (const rawLine of unwrapped.split(/\n/)) {
+    const line = stripLineDecorators(rawLine);
+    if (!line || /^here are|^output|^handles|^suggestions?/i.test(line)) {
+      continue;
+    }
+
+    for (const part of line.split(/[,;|]/)) {
+      const cleaned = stripLineDecorators(part);
+      if (cleaned) {
+        push(cleaned);
+      }
+    }
+  }
+
+  const minBody = Math.max(0, minLen - 1);
   const maxBody = Math.max(minBody, maxLen - 1);
-  return new RegExp(`^[a-z][a-z0-9]{${minBody},${maxBody}}$`);
+  const scanPattern = new RegExp(
+    `[a-z][a-z0-9]{${minBody},${maxBody}}`,
+    "gi",
+  );
+  for (const match of unwrapped.matchAll(scanPattern)) {
+    push(match[0]!);
+  }
+
+  return candidates;
 }
 
 function parseSuggestions(
@@ -26,36 +110,35 @@ function parseSuggestions(
   prefix: string,
   suffix: string,
 ): string[] {
-  const pattern = handlePattern(minLen, maxLen);
   const seen = new Set<string>();
   const results: string[] = [];
 
-  for (const raw of text.split(/\n|,/)) {
-    let line = raw.replace(/[^a-z0-9]/gi, "").toLowerCase();
-    if (!line) {
+  for (const candidate of extractHandleCandidates(text, minLen, maxLen)) {
+    const handle = applyAffixes(candidate, prefix, suffix);
+
+    if (!isValidHandle(handle, minLen, maxLen) || seen.has(handle)) {
       continue;
     }
-    if (prefix && !line.startsWith(prefix.toLowerCase())) {
-      line = prefix.toLowerCase() + line;
-    }
-    if (suffix && !line.endsWith(suffix.toLowerCase())) {
-      line = line + suffix.toLowerCase();
-    }
-    if (
-      pattern.test(line) &&
-      line.length >= minLen &&
-      line.length <= maxLen &&
-      !seen.has(line)
-    ) {
-      seen.add(line);
-      results.push(line);
-    }
+
+    seen.add(handle);
+    results.push(handle);
+
     if (results.length >= count) {
       break;
     }
   }
 
   return results;
+}
+
+function fallbackSuggestions(params: GenerationParams, count: number): string[] {
+  return generateBatch({
+    ...params,
+    batchSize: count,
+    seed: `ai-fallback-${Date.now()}`,
+  })
+    .map((candidate) => candidate.normalized)
+    .slice(0, count);
 }
 
 type GeminiErrorBody = {
@@ -154,6 +237,7 @@ export async function POST(request: Request) {
   const systemInstruction = buildGeminiSystemPrompt(params);
   const userMessage = buildGeminiUserPrompt(
     userPrompt,
+    params,
     referenceHandle,
     count,
   );
@@ -171,8 +255,8 @@ export async function POST(request: Request) {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents: [{ role: "user", parts: [{ text: userMessage }] }],
           generationConfig: {
-            temperature: 0.95,
-            maxOutputTokens: 512,
+            temperature: 0.9,
+            maxOutputTokens: 1024,
           },
         }),
       },
@@ -199,14 +283,32 @@ export async function POST(request: Request) {
   const data = (await response.json()) as {
     candidates?: Array<{
       content?: { parts?: Array<{ text?: string }> };
+      finishReason?: string;
     }>;
+    promptFeedback?: { blockReason?: string };
   };
 
   const rawText =
     data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ??
     "";
 
-  const suggestions = parseSuggestions(
+  if (!rawText.trim()) {
+    const finishReason = data.candidates?.[0]?.finishReason;
+    const blockReason = data.promptFeedback?.blockReason;
+    console.warn("[polish-handle] empty Gemini text", { finishReason, blockReason });
+
+    const fallback = fallbackSuggestions(params, count);
+    if (fallback.length > 0) {
+      return NextResponse.json({ suggestions: fallback, source: "engine" });
+    }
+
+    return NextResponse.json(
+      { error: "The AI returned no text. Try a different description." },
+      { status: 502 },
+    );
+  }
+
+  let suggestions = parseSuggestions(
     rawText,
     count,
     params.minLen,
@@ -216,6 +318,17 @@ export async function POST(request: Request) {
   );
 
   if (suggestions.length === 0) {
+    console.warn("[polish-handle] parse rejected model output", {
+      minLen: params.minLen,
+      maxLen: params.maxLen,
+      preview: rawText.slice(0, 400),
+    });
+
+    suggestions = fallbackSuggestions(params, count);
+    if (suggestions.length > 0) {
+      return NextResponse.json({ suggestions, source: "engine" });
+    }
+
     return NextResponse.json(
       { error: "No valid handles returned. Try a different description." },
       { status: 502 },

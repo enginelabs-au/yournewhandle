@@ -1,29 +1,36 @@
 import {
   PLATFORM_REGISTRY,
   platformCheckResult,
+  profileUrlForPlatform,
+  platformCountForCheckMode,
+  platformsForCheckMode,
+  type CheckMode,
   type PlatformDefinition,
 } from "@/lib/platforms-registry";
 import type { PlatformCheckResult } from "./report-types";
-import { checkGithub } from "./socials";
 import { isValidHostname, normalizeHandleForCheck } from "./constants";
 import type { CheckReport } from "./report-types";
-import { emptyReport, loadingReport } from "./report-types";
+import { emptyReport } from "./report-types";
 
 export type { CheckReport, PlatformCheckResult } from "./report-types";
 export { emptyReport, loadingReport } from "./report-types";
 
 const DEBOUNCE_MS = 300;
-const PLATFORM_COUNT = PLATFORM_REGISTRY.length;
+const CONCURRENCY = 10;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let activeController: AbortController | null = null;
 
 export type CheckUpdateCallback = (report: CheckReport) => void;
 
-export function runChecker(handle: string, onUpdate: CheckUpdateCallback): void {
+export function runChecker(
+  handle: string,
+  onUpdate: CheckUpdateCallback,
+  mode: CheckMode = "light",
+): void {
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
-    void executeChecks(handle, onUpdate);
+    void executeChecks(handle, onUpdate, mode);
   }, DEBOUNCE_MS);
 }
 
@@ -36,95 +43,197 @@ export function cancelChecker(): void {
   activeController = null;
 }
 
-function profileUrlFor(platform: PlatformDefinition, handle: string): string {
-  switch (platform.id) {
-    case "github":
-      return `https://github.com/${handle}`;
-    case "twitter":
-      return `https://x.com/${handle}`;
-    case "telegram":
-      return `https://t.me/${handle}`;
-    case "instagram":
-      return `https://instagram.com/${handle}`;
-    case "youtube":
-      return `https://youtube.com/@${handle}`;
-    case "twitch":
-      return `https://twitch.tv/${handle}`;
-    case "tiktok":
-      return `https://tiktok.com/@${handle}`;
-    case "reddit":
-      return `https://reddit.com/user/${handle}`;
-    case "discord":
-      return platform.visitUrl;
-    default:
-      return `${platform.visitUrl}/${handle}`;
-  }
-}
-
-function idlePlatform(
-  platform: PlatformDefinition,
-  profileUrl: string,
-  message?: string,
-): PlatformCheckResult {
-  return platformCheckResult(platform, {
-    status: "idle",
-    message,
-    profileUrl,
-  });
-}
-
-async function checkPlatform(
+async function checkPlatformViaApi(
   platform: PlatformDefinition,
   handle: string,
   signal: AbortSignal,
 ): Promise<PlatformCheckResult> {
   const started = performance.now();
-  const profileUrl = profileUrlFor(platform, handle);
+  const profileUrl = profileUrlForPlatform(platform, handle);
 
-  if (platform.id === "github") {
-    const result = await checkGithub(handle, signal);
+  if (!platform.wired) {
     return platformCheckResult(platform, {
-      status: result.status,
-      message: result.message,
-      latencyMs: Math.round(performance.now() - started),
-      profileUrl: result.deepLink ?? profileUrl,
+      status: "idle",
+      message: "Not wired",
+      profileUrl,
     });
   }
 
-  if (platform.id === "twitter") {
-    const { checkTwitter } = await import("./socials");
-    const result = checkTwitter(handle);
+  try {
+    const params = new URLSearchParams({
+      handle,
+      service: platform.nickCheckrService,
+    });
+    const response = await fetch(`/api/check-platform?${params.toString()}`, {
+      signal,
+    });
+
+    if (!response.ok) {
+      return platformCheckResult(platform, {
+        status: "error",
+        message: "Check request failed",
+        latencyMs: Math.round(performance.now() - started),
+        profileUrl,
+      });
+    }
+
+    const data = (await response.json()) as {
+      status?: PlatformCheckResult["status"];
+      message?: string;
+    };
+
     return platformCheckResult(platform, {
-      status: result.status,
-      message: result.message,
+      status: data.status ?? "unknown",
+      message: data.message,
       latencyMs: Math.round(performance.now() - started),
-      profileUrl: result.deepLink ?? profileUrl,
+      profileUrl,
+    });
+  } catch {
+    if (signal.aborted) {
+      return platformCheckResult(platform, {
+        status: "idle",
+        profileUrl,
+      });
+    }
+    return platformCheckResult(platform, {
+      status: "error",
+      message: "Network error",
+      latencyMs: Math.round(performance.now() - started),
+      profileUrl,
     });
   }
+}
 
-  if (platform.id === "telegram") {
-    const { checkTelegram } = await import("./socials");
-    const result = checkTelegram(handle);
-    return platformCheckResult(platform, {
-      status: result.status,
-      message: result.message,
-      latencyMs: Math.round(performance.now() - started),
-      profileUrl: result.deepLink ?? profileUrl,
-    });
+async function runPool<T>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<void>,
+  concurrency: number,
+): Promise<void> {
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await worker(items[index]!, index);
+    }
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 40 + Math.random() * 80));
-
-  return idlePlatform(
-    platform,
-    profileUrl,
-    "API integration coming soon",
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () =>
+      runWorker(),
+    ),
   );
+}
+
+function buildFullResultSet(
+  handle: string,
+  mode: CheckMode,
+  initialStatus: PlatformCheckResult["status"],
+  idleMessage?: string,
+): PlatformCheckResult[] {
+  const checkIds = new Set(
+    platformsForCheckMode(mode).map((platform) => platform.id),
+  );
+
+  return PLATFORM_REGISTRY.map((platform) =>
+    platformCheckResult(platform, {
+      status: checkIds.has(platform.id) ? initialStatus : "idle",
+      message:
+        mode === "light" && !checkIds.has(platform.id)
+          ? (idleMessage ?? "Deep check only")
+          : undefined,
+      profileUrl: profileUrlForPlatform(platform, handle),
+    }),
+  );
+}
+
+function publishMergedReport(
+  handle: string,
+  normalized: string,
+  mode: CheckMode,
+  resultsById: Map<string, PlatformCheckResult>,
+  progress: { current: number; total: number },
+  isRunning: boolean,
+  startedAt?: number,
+): CheckReport {
+  return {
+    handle,
+    normalized,
+    mode,
+    platforms: PLATFORM_REGISTRY.map(
+      (platform) => resultsById.get(platform.id)!,
+    ),
+    progress,
+    isRunning,
+    startedAt: isRunning ? startedAt : undefined,
+  };
+}
+
+export async function checkHandlePlatforms(
+  handle: string,
+  mode: CheckMode,
+  signal?: AbortSignal,
+  onProgress?: (
+    completed: number,
+    total: number,
+    platforms: PlatformCheckResult[],
+  ) => void,
+): Promise<PlatformCheckResult[]> {
+  const normalized = normalizeHandleForCheck(handle);
+  if (!normalized || !isValidHostname(normalized)) {
+    return [];
+  }
+
+  const checkRegistry = platformsForCheckMode(mode);
+  const checkTotal = checkRegistry.length;
+  const resultsById = new Map(
+    buildFullResultSet(handle, mode, "loading").map((platform) => [
+      platform.platformId,
+      platform,
+    ]),
+  );
+
+  let completed = 0;
+
+  const publishProgress = () => {
+    if (!onProgress || signal?.aborted) {
+      return;
+    }
+    onProgress(
+      completed,
+      checkTotal,
+      PLATFORM_REGISTRY.map((platform) => resultsById.get(platform.id)!),
+    );
+  };
+
+  await runPool(
+    checkRegistry,
+    async (platform) => {
+      if (signal?.aborted) {
+        return;
+      }
+      resultsById.set(
+        platform.id,
+        await checkPlatformViaApi(
+          platform,
+          normalized,
+          signal ?? new AbortController().signal,
+        ),
+      );
+      completed += 1;
+      publishProgress();
+    },
+    CONCURRENCY,
+  );
+
+  return PLATFORM_REGISTRY.map((platform) => resultsById.get(platform.id)!);
 }
 
 async function executeChecks(
   handle: string,
   onUpdate: CheckUpdateCallback,
+  mode: CheckMode,
 ): Promise<void> {
   activeController?.abort();
   const controller = new AbortController();
@@ -132,84 +241,76 @@ async function executeChecks(
   const { signal } = controller;
 
   const normalized = normalizeHandleForCheck(handle);
+  const checkRegistry = platformsForCheckMode(mode);
+  const checkTotal = platformCountForCheckMode(mode);
 
   if (!normalized || !isValidHostname(normalized)) {
     onUpdate({
-      ...emptyReport(handle),
+      ...emptyReport(handle, mode),
       error: "Invalid username (use letters, numbers, hyphens)",
     });
     return;
   }
 
-  const results: PlatformCheckResult[] = [];
+  const resultsById = new Map(
+    buildFullResultSet(handle, mode, "loading").map((platform) => [
+      platform.platformId,
+      platform,
+    ]),
+  );
 
-  onUpdate({
-    handle,
-    normalized,
-    platforms: [],
-    progress: { current: 0, total: PLATFORM_COUNT },
-    isRunning: true,
-  });
+  let completed = 0;
+  const startedAt = Date.now();
+
+  onUpdate(
+    publishMergedReport(handle, normalized, mode, resultsById, {
+      current: 0,
+      total: checkTotal,
+    }, true, startedAt),
+  );
 
   try {
-    for (let i = 0; i < PLATFORM_REGISTRY.length; i++) {
-      if (signal.aborted) return;
+    await runPool(
+      checkRegistry,
+      async (platform) => {
+        if (signal.aborted) {
+          return;
+        }
 
-      const platform = PLATFORM_REGISTRY[i]!;
-      const profileUrl = profileUrlFor(platform, normalized);
+        const result = await checkPlatformViaApi(platform, normalized, signal);
+        resultsById.set(platform.id, result);
+        completed += 1;
 
-      const loadingPlatforms: PlatformCheckResult[] = PLATFORM_REGISTRY.map(
-        (p, idx) => {
-          const url = profileUrlFor(p, normalized);
-          if (idx < i) return results[idx]!;
-          if (idx === i) {
-            return platformCheckResult(p, {
-              status: "loading",
-              profileUrl: url,
-            });
-          }
-          return idlePlatform(p, url);
-        },
-      );
+        if (signal.aborted) {
+          return;
+        }
 
-      onUpdate({
-        handle,
-        normalized,
-        platforms: loadingPlatforms,
-        progress: { current: i + 1, total: PLATFORM_COUNT },
-        isRunning: true,
-      });
+        onUpdate(
+          publishMergedReport(handle, normalized, mode, resultsById, {
+            current: completed,
+            total: checkTotal,
+          }, completed < checkTotal, startedAt),
+        );
+      },
+      CONCURRENCY,
+    );
 
-      const result = await checkPlatform(platform, normalized, signal);
-      results.push(result);
-
-      if (signal.aborted) return;
-
-      onUpdate({
-        handle,
-        normalized,
-        platforms: [
-          ...results,
-          ...PLATFORM_REGISTRY.slice(i + 1).map((p) =>
-            idlePlatform(p, profileUrlFor(p, normalized)),
-          ),
-        ],
-        progress: { current: i + 1, total: PLATFORM_COUNT },
-        isRunning: i + 1 < PLATFORM_COUNT,
-      });
+    if (signal.aborted) {
+      return;
     }
 
-    onUpdate({
-      handle,
-      normalized,
-      platforms: results,
-      progress: { current: PLATFORM_COUNT, total: PLATFORM_COUNT },
-      isRunning: false,
-    });
+    onUpdate(
+      publishMergedReport(handle, normalized, mode, resultsById, {
+        current: checkTotal,
+        total: checkTotal,
+      }, false, startedAt),
+    );
   } catch {
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     onUpdate({
-      ...emptyReport(handle),
+      ...emptyReport(handle, mode),
       error: "Checker failed — network error",
     });
   }

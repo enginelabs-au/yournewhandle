@@ -1,22 +1,37 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { CheckReport } from "@/lib/checker/orchestrator";
+import type {
+  BatchCheckProgress,
+  BatchPlatformResults,
+} from "@/hooks/useBatchAvailability";
 import { CheckerSearchCard } from "@/components/inspector/CheckerSearchCard";
 import { CheckExportBar } from "@/components/inspector/CheckExportBar";
 import { CheckerStats } from "@/components/inspector/CheckerStats";
 import { CheckerPanel } from "@/components/inspector/CheckerPanel";
+import { BatchCheckQueue } from "@/components/inspector/BatchCheckQueue";
+import { useAppPreferences } from "@/context/AppPreferencesProvider";
+import { PLATFORM_COUNT } from "@/lib/platforms-registry";
+import type { Candidate } from "@/lib/types";
+
+type CheckResultsView = "batch" | "catalog";
 
 type CheckerColumnProps = {
   selectedHandle: string | null;
   report: CheckReport | null;
   checkDraft: string;
   onCheckDraftChange: (value: string) => void;
-  onSubmit: (handle: string) => void;
+  onSubmit: (handle: string, mode: import("@/lib/platforms-registry").CheckMode) => void;
   onStop: () => void;
   onRetry: () => void;
   onInputFocus?: () => void;
   disabled?: boolean;
   pipelineActive?: boolean;
+  batchCandidates?: Candidate[];
+  batchPlatformResults?: BatchPlatformResults;
+  batchProgress?: BatchCheckProgress | null;
+  isBatchChecking?: boolean;
 };
 
 export function CheckerColumn({
@@ -30,7 +45,23 @@ export function CheckerColumn({
   onInputFocus,
   disabled,
   pipelineActive,
+  batchCandidates = [],
+  batchPlatformResults = {},
+  batchProgress = null,
+  isBatchChecking = false,
 }: CheckerColumnProps) {
+  const { t } = useAppPreferences();
+  const showBatchView = batchCandidates.length > 0;
+  const [resultsView, setResultsView] = useState<CheckResultsView>("batch");
+  const prevBatchCountRef = useRef(0);
+
+  useEffect(() => {
+    if (batchCandidates.length > 0 && prevBatchCountRef.current === 0) {
+      setResultsView("batch");
+    }
+    prevBatchCountRef.current = batchCandidates.length;
+  }, [batchCandidates.length]);
+
   const handleCopy = async () => {
     if (!selectedHandle) return;
     try {
@@ -85,35 +116,86 @@ export function CheckerColumn({
       <div className="check-studio-mesh" aria-hidden />
       <div className="check-studio-accent" aria-hidden />
 
-      <div className="relative flex flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-5">
-        <div className="check-command-bar check-command-glow space-y-3">
+      <div className="relative flex flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-5">
+        <div className="check-command-bar check-command-glow shrink-0 space-y-3">
           <CheckerSearchCard
             onSubmit={onSubmit}
             onStop={onStop}
             onInputFocus={onInputFocus}
-            disabled={disabled}
+            disabled={disabled || isBatchChecking}
             value={checkDraft}
             onValueChange={onCheckDraftChange}
-            report={report}
-            selectedHandle={selectedHandle}
+            report={showBatchView && resultsView === "batch" ? null : report}
+            selectedHandle={
+              showBatchView && resultsView === "batch" ? null : selectedHandle
+            }
             embedded
+            hideProgress={isBatchChecking && resultsView === "batch"}
           />
-          <CheckExportBar
-            selectedHandle={selectedHandle}
-            hasReport={Boolean(report)}
-            isRunning={Boolean(report?.isRunning)}
-            onCopy={handleCopy}
-            onExportJson={handleExportJson}
-            onExportCsv={handleExportCsv}
-            onRetry={onRetry}
-          />
+          {!showBatchView ? (
+            <CheckExportBar
+              selectedHandle={selectedHandle}
+              hasReport={Boolean(report)}
+              isRunning={Boolean(report?.isRunning)}
+              onCopy={handleCopy}
+              onExportJson={handleExportJson}
+              onExportCsv={handleExportCsv}
+              onRetry={onRetry}
+            />
+          ) : null}
         </div>
 
-        {report && selectedHandle ? (
-          <CheckerStats report={report} key={selectedHandle} />
+        {showBatchView ? (
+          <div
+            className="check-results-view-tabs flex shrink-0 gap-1.5"
+            role="tablist"
+            aria-label={t("batchCheckTitle")}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={resultsView === "batch"}
+              onClick={() => setResultsView("batch")}
+              className={`check-filter-chip shrink-0 ${
+                resultsView === "batch" ? "check-filter-chip-active" : ""
+              }`}
+            >
+              {t("checkViewBatch")}
+              <span className="opacity-60">{batchCandidates.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={resultsView === "catalog"}
+              onClick={() => setResultsView("catalog")}
+              className={`check-filter-chip shrink-0 ${
+                resultsView === "catalog" ? "check-filter-chip-active" : ""
+              }`}
+            >
+              {t("checkViewAllPlatforms")}
+              <span className="opacity-60">{PLATFORM_COUNT}</span>
+            </button>
+          </div>
         ) : null}
 
-        <CheckerPanel report={report} selectedHandle={selectedHandle} />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {showBatchView && resultsView === "batch" ? (
+            <BatchCheckQueue
+              candidates={batchCandidates}
+              platformResults={batchPlatformResults}
+              progress={batchProgress}
+              isRunning={isBatchChecking}
+              onStop={onStop}
+            />
+          ) : (
+            <div className="h-full min-h-0 overflow-y-auto">
+              {!showBatchView && report && selectedHandle ? (
+                <CheckerStats report={report} key={selectedHandle} />
+              ) : null}
+              <CheckerPanel report={report} selectedHandle={selectedHandle} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -11,10 +11,15 @@ type GeneratorColumnProps = {
   onParamsChange: (patch: Partial<GenerationParams>) => void;
   onApplyConfig: (params: GenerationParams) => void;
   onGenerate: (overrideParams?: GenerationParams) => void;
+  onGenerateAndCheck: () => void;
   onRandomizingChange?: (active: boolean) => void;
+  shufflePresetId?: string | null;
   canGenerate: boolean;
   isGenerating: boolean;
   isRandomizing?: boolean;
+  isBatchChecking?: boolean;
+  pipelineRunning?: boolean;
+  onStopPipeline?: () => void;
   candidates: Candidate[];
   selectedCandidateId: string | null;
   onSelectCandidate: (candidate: Candidate) => void;
@@ -28,10 +33,15 @@ export function GeneratorColumn({
   onParamsChange,
   onApplyConfig,
   onGenerate,
+  onGenerateAndCheck,
   onRandomizingChange,
+  shufflePresetId = null,
   canGenerate,
   isGenerating,
   isRandomizing = false,
+  isBatchChecking = false,
+  pipelineRunning = false,
+  onStopPipeline,
   candidates,
   selectedCandidateId,
   onSelectCandidate,
@@ -45,6 +55,11 @@ export function GeneratorColumn({
     outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  const handleCustomGenerate = () => {
+    scrollToOutput();
+    onGenerate();
+  };
+
   const selectedCandidate =
     candidates.find((candidate) => candidate.id === selectedCandidateId) ??
     null;
@@ -55,8 +70,11 @@ export function GeneratorColumn({
     onSelectCandidate,
     isGenerating,
     isRandomizing,
+    isBatchChecking,
+    pipelineRunning,
     error,
-    onGenerate: () => onGenerate(),
+    onGenerateRandomlyAndCheck: onGenerateAndCheck,
+    onStopPipeline,
     canGenerate,
   };
 
@@ -91,16 +109,15 @@ export function GeneratorColumn({
           onParamsChange={onParamsChange}
           onApplyConfig={onApplyConfig}
           onGenerate={onGenerate}
+          onCustomGenerate={handleCustomGenerate}
+          onStopPipeline={onStopPipeline}
+          pipelineRunning={pipelineRunning}
           onScrollToOutput={scrollToOutput}
           onRandomizingChange={onRandomizingChange}
           isGenerating={isGenerating}
+          shufflePresetId={shufflePresetId}
           embedded
-          controlsOnly
         />
-      </div>
-
-      <div className="gen-studio-divider relative shrink-0 border-t p-4 sm:p-5">
-        <GeneratorOutputSection {...outputProps} />
       </div>
     </div>
   );

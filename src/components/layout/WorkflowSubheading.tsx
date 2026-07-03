@@ -1,33 +1,47 @@
 "use client";
 
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw, Sparkles, Square } from "lucide-react";
+import { HandleLengthSlider } from "@/components/layout/HandleLengthSlider";
 import { useAppPreferences } from "@/context/AppPreferencesProvider";
-import type { WorkflowDirection } from "@/hooks/useWorkflowPipeline";
+import type {
+  StudioZone,
+  WorkflowDirection,
+} from "@/hooks/useWorkflowDirection";
 
 type WorkflowSubheadingProps = {
   direction: WorkflowDirection;
+  activeZone: StudioZone;
+  onSelectZone: (zone: StudioZone) => void;
   onFlip: () => void;
-  onRunPipeline: () => void;
-  pipelineRunning: boolean;
-  canRunPipeline: boolean;
+  onGenerateAndCheck: () => void;
+  onStop: () => void;
+  isRunning: boolean;
+  canRun: boolean;
+  handleLength: number;
+  lengthHardLock: boolean;
+  onLengthHardLockChange: (locked: boolean) => void;
+  onLengthChange: (length: number) => void;
 };
 
 export function WorkflowSubheading({
   direction,
+  activeZone,
+  onSelectZone,
   onFlip,
-  onRunPipeline,
-  pipelineRunning,
-  canRunPipeline,
+  onGenerateAndCheck,
+  onStop,
+  isRunning,
+  canRun,
+  handleLength,
+  lengthHardLock,
+  onLengthHardLockChange,
+  onLengthChange,
 }: WorkflowSubheadingProps) {
   const { t } = useAppPreferences();
   const isGenerateFirst = direction === "generate-check";
 
-  const runLabel = pipelineRunning
-    ? t("running")
-    : isGenerateFirst
-      ? t("generateCheck")
-      : t("checkSuggest");
-
+  const leftZone: StudioZone = isGenerateFirst ? "generate" : "check";
+  const rightZone: StudioZone = isGenerateFirst ? "check" : "generate";
   const leftLabel = isGenerateFirst ? t("generate") : t("check");
   const rightLabel = isGenerateFirst ? t("check") : t("generate");
   const leftClass = isGenerateFirst ? "workflow-sub-gen" : "workflow-sub-check";
@@ -36,9 +50,16 @@ export function WorkflowSubheading({
   return (
     <div className="workflow-subheading-wrap mb-6 flex flex-col items-center gap-3">
       <div className="workflow-subheading">
-        <span className={`workflow-sub-slot workflow-sub-slot-left ${leftClass}`}>
+        <button
+          type="button"
+          onClick={() => onSelectZone(leftZone)}
+          className={`workflow-sub-slot workflow-sub-slot-btn workflow-sub-slot-left ${leftClass} ${
+            activeZone === leftZone ? "workflow-sub-slot-active" : ""
+          }`}
+          aria-pressed={activeZone === leftZone}
+        >
           {leftLabel}
-        </span>
+        </button>
         <button
           type="button"
           onClick={onFlip}
@@ -53,24 +74,46 @@ export function WorkflowSubheading({
             aria-hidden
           />
         </button>
-        <span className={`workflow-sub-slot workflow-sub-slot-right ${rightClass}`}>
+        <button
+          type="button"
+          onClick={() => onSelectZone(rightZone)}
+          className={`workflow-sub-slot workflow-sub-slot-btn workflow-sub-slot-right ${rightClass} ${
+            activeZone === rightZone ? "workflow-sub-slot-active" : ""
+          }`}
+          aria-pressed={activeZone === rightZone}
+        >
           {rightLabel}
-        </span>
+        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={onRunPipeline}
-        disabled={pipelineRunning || !canRunPipeline}
-        className="btn-pipeline inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {pipelineRunning ? (
-          <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
+      {isRunning ? (
+        <button
+          type="button"
+          onClick={onStop}
+          className="dr-btn-stop inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-semibold"
+        >
+          <Square className="h-3.5 w-3.5 fill-current" aria-hidden />
+          {t("stop")}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onGenerateAndCheck}
+          disabled={!canRun}
+          className="btn-pipeline inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
           <Sparkles className="h-4 w-4" aria-hidden />
-        )}
-        {runLabel}
-      </button>
+          {t("generateCheck")}
+        </button>
+      )}
+
+      <HandleLengthSlider
+        maxLen={handleLength}
+        hardLock={lengthHardLock}
+        onHardLockChange={onLengthHardLockChange}
+        onChange={onLengthChange}
+        disabled={isRunning}
+      />
     </div>
   );
 }
