@@ -13,6 +13,7 @@ export function useWorkflowDirection() {
     setDirection((current) =>
       current === "generate-check" ? "check-generate" : "generate-check",
     );
+    setActiveZone((zone) => (zone === "check" ? "generate" : "check"));
   }, []);
 
   const selectCheckZone = useCallback(() => {
