@@ -205,10 +205,15 @@ function hashColor(name) {
   return `hsl(${hue} 55% 45%)`;
 }
 
+const EXCLUDED_CATEGORIES = new Set(["Domain Names"]);
+
 const seenIds = new Set();
 const platforms = [];
 
 for (const service of services) {
+  if (EXCLUDED_CATEGORIES.has(service.category)) {
+    continue;
+  }
   let id = toId(service.name);
   if (seenIds.has(id)) {
     id = `${id}-${platforms.length}`;

@@ -20,7 +20,6 @@ export const CATEGORY_DISPLAY_ORDER: PlatformCategory[] = [
   "Finance & Crypto",
   "Education & Learning",
   "Fitness & Sports",
-  "Domain Names",
 ];
 
 export const DEFAULT_OPEN_CATEGORIES = new Set<PlatformCategory>(["Popular"]);

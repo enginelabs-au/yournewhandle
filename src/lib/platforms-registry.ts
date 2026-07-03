@@ -10,6 +10,25 @@ export type { PlatformCategory, PlatformDefinition } from "@/lib/platforms-regis
 
 export type CheckMode = "light" | "deep";
 
+/** Excluded from username checker UI and checks (TLD / DNS entries). */
+export const EXCLUDED_CHECKER_CATEGORIES = ["Domain Names"] as const;
+
+function isCheckerPlatform(platform: PlatformDefinition): boolean {
+  return !EXCLUDED_CHECKER_CATEGORIES.includes(
+    platform.category as (typeof EXCLUDED_CHECKER_CATEGORIES)[number],
+  );
+}
+
+export const CHECKER_PLATFORM_DEFINITIONS: PlatformDefinition[] =
+  GENERATED_PLATFORM_DEFINITIONS.filter(isCheckerPlatform);
+
+export const CHECKER_PLATFORM_CATEGORIES = GENERATED_PLATFORM_CATEGORIES.filter(
+  (category) =>
+    !EXCLUDED_CHECKER_CATEGORIES.includes(
+      category as (typeof EXCLUDED_CHECKER_CATEGORIES)[number],
+    ),
+);
+
 export const POPULAR_PLATFORM_COUNT = 50;
 
 type PlatformResultOverrides = Partial<
@@ -60,7 +79,7 @@ export function profileUrlForPlatform(
 }
 
 export const PLATFORM_REGISTRY: PlatformDefinition[] = [
-  ...GENERATED_PLATFORM_DEFINITIONS,
+  ...CHECKER_PLATFORM_DEFINITIONS,
 ].sort(
   (a, b) => a.popularity - b.popularity || a.name.localeCompare(b.name),
 );
@@ -85,7 +104,7 @@ export function platformCountForCheckMode(mode: CheckMode): number {
 export const FILTER_TABS: { id: PlatformCategory | "All"; label: string }[] = [
   { id: "All", label: "All" },
   { id: "Popular", label: "Popular" },
-  ...GENERATED_PLATFORM_CATEGORIES.map((category) => ({
+  ...CHECKER_PLATFORM_CATEGORIES.map((category) => ({
     id: category as PlatformCategory,
     label: category,
   })),
