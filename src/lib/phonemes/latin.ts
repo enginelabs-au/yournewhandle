@@ -1,0 +1,33 @@
+import type { PhonemePool } from "@/lib/types";
+
+export const latinPool: PhonemePool = {
+  onsets: [
+    "b",
+    "c",
+    "d",
+    "f",
+    "g",
+    "l",
+    "m",
+    "n",
+    "p",
+    "r",
+    "s",
+    "t",
+    "v",
+    "tr",
+    "cr",
+    "pr",
+    "cl",
+    "fl",
+    "sc",
+    "br",
+    "dr",
+    "gr",
+    "pl",
+    "st",
+    "sp",
+  ],
+  nuclei: ["a", "e", "i", "o", "u", "ae", "oe", "io", "au"],
+  codas: ["s", "m", "n", "r", "t", "x", "us", "um", "is", "or"],
+};

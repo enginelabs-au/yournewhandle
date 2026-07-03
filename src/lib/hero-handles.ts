@@ -1,0 +1,23 @@
+/** Cool pronounceable handles for the hero rotation. */
+export const HERO_COOL_HANDLES = [
+  "zoftkeld",
+  "frinvex",
+  "novalyx",
+  "keldra",
+  "voxlyn",
+  "plenix",
+  "torvane",
+  "sylphora",
+  "bramblex",
+  "quorin",
+  "nexflame",
+  "lumikoi",
+  "driftvale",
+  "mythara",
+  "solvex",
+  "prismalt",
+  "aetheron",
+  "crynnex",
+  "velmora",
+  "orivane",
+] as const;
