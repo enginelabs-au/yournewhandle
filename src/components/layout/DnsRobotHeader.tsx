@@ -5,6 +5,7 @@ import { Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LanguageSelector } from "@/components/layout/LanguageSelector";
 import { ThemeSwitcher } from "@/components/layout/ThemeSwitcher";
+import { ApiNavMenu } from "@/components/layout/ApiNavMenu";
 import { useAppPreferences } from "@/context/AppPreferencesProvider";
 import { PLATFORM_COUNT, PLATFORM_REGISTRY } from "@/lib/platforms-registry";
 
@@ -42,8 +43,6 @@ export function DnsRobotHeader() {
               <span className="dr-header-platform font-medium text-dr-blue-light transition-opacity duration-300">
                 {platform.name}
               </span>
-              {" · "}
-              <span>{t("headerSubtitle")}</span>
             </span>
           </div>
         </Link>
@@ -57,6 +56,7 @@ export function DnsRobotHeader() {
             </span>
           </div>
 
+          <ApiNavMenu />
           <LanguageSelector />
           <ThemeSwitcher />
         </div>
