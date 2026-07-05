@@ -57,6 +57,29 @@ async function fetchWithTimeout(
   }
 }
 
+async function fetchPlainWithTimeout(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new TimeoutError(TIMEOUT_MS);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractHtmlTitle(body: string): string | null {
+  return body.match(/<title[^>]*>([^<]+)/i)?.[1]?.trim() ?? null;
+}
+
 export async function checkTikTok(nick: string): Promise<CheckResult> {
   const profileUrl = `https://www.tiktok.com/@${nick}`;
   const url = `https://www.tiktok.com/oembed?url=${encodeURIComponent(profileUrl)}`;
@@ -519,6 +542,292 @@ export async function checkReddit(nick: string): Promise<CheckResult> {
   };
 }
 
+export async function checkDiscord(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    "https://discord.com/api/v9/unique-username/username-attempt-unauthed",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: nick }),
+    },
+  );
+  const payload = (await response.json()) as {
+    taken?: boolean;
+    code?: number;
+    message?: string;
+  };
+
+  if (payload.taken === false) {
+    return { status: AvailabilityStatus.Available };
+  }
+  if (payload.taken === true) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: payload.message ?? "Discord username check failed",
+  };
+}
+
+export async function checkMatrix(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    `https://matrix.org/_matrix/client/v3/profile/@${encodeURIComponent(nick)}:matrix.org/displayname`,
+    { headers: { Accept: "application/json" } },
+  );
+  const body = await response.text();
+
+  if (response.status === 404 && body.includes("M_NOT_FOUND")) {
+    return { status: AvailabilityStatus.Available };
+  }
+  if (response.ok) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `Matrix HTTP ${response.status}`,
+  };
+}
+
+export async function checkHackerNews(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    `https://hacker-news.firebaseio.com/v0/user/${encodeURIComponent(nick)}.json`,
+    { headers: { Accept: "application/json" } },
+  );
+
+  if (!response.ok) {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: `Hacker News HTTP ${response.status}`,
+    };
+  }
+
+  const payload = (await response.json()) as { id?: string } | null;
+  if (payload === null) {
+    return { status: AvailabilityStatus.Available };
+  }
+  if (payload.id) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: "Hacker News check inconclusive",
+  };
+}
+
+export async function checkPyPI(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(
+    `https://pypi.org/simple/${encodeURIComponent(nick)}/`,
+    { headers: { Accept: "text/html" } },
+  );
+  const body = await response.text();
+
+  if (response.status === 404 || body.includes("404 Not Found")) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (
+    body.includes("pypi:repository-version") ||
+    body.includes(`Links for ${nick}`)
+  ) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  const blocked = detectBlockedResponse("PyPI", response.status, body);
+  if (blocked) {
+    return { status: AvailabilityStatus.Error, errorDetail: blocked };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: "PyPI check inconclusive",
+  };
+}
+
+export async function checkMinecraft(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(nick)}`,
+    { headers: { Accept: "application/json" } },
+  );
+
+  if (response.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+  if (response.ok) {
+    return { status: AvailabilityStatus.Taken };
+  }
+  if (response.status === 429) {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: "Minecraft API rate limited",
+    };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `Minecraft API HTTP ${response.status}`,
+  };
+}
+
+export async function checkMedium(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(`https://medium.com/@${encodeURIComponent(nick)}`, {
+    headers: { "Accept-Language": "en-US,en;q=0.9" },
+  });
+  const body = await response.text();
+
+  const blocked = detectBlockedResponse("Medium", response.status, body);
+  if (blocked) {
+    return { status: AvailabilityStatus.Error, errorDetail: blocked };
+  }
+
+  if (
+    body.includes("Out of nothing, something.") ||
+    body.includes("404")
+  ) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  const title = extractHtmlTitle(body);
+  if (!title || title === "Medium" || title.startsWith("Medium: Error")) {
+    return { status: AvailabilityStatus.Available };
+  }
+  if (title.includes("Medium")) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (response.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: "Medium check inconclusive",
+  };
+}
+
+export async function checkSubstack(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(`https://${encodeURIComponent(nick)}.substack.com`, {
+    redirect: "manual",
+    headers: { "Accept-Language": "en-US,en;q=0.9" },
+  });
+
+  if (response.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  const body =
+    response.status === 200 || response.status === 403
+      ? await response.text()
+      : "";
+
+  if (body.includes("Not Found") || body.includes("not found")) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (response.ok) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (response.status === 403 && body.length > 0) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `Substack HTTP ${response.status}`,
+  };
+}
+
+export async function checkNotion(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    `https://${encodeURIComponent(nick)}.notion.site`,
+    { headers: { "Accept-Language": "en-US,en;q=0.9" } },
+  );
+  const body = await response.text();
+
+  if (response.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  const title = extractHtmlTitle(body);
+  if (
+    title === "Notion" &&
+    body.length <= 20_000 &&
+    body.includes("notion-html")
+  ) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (response.ok) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `Notion HTTP ${response.status}`,
+  };
+}
+
+export async function checkReplit(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(`https://replit.com/@${encodeURIComponent(nick)}`, {
+    headers: { "Accept-Language": "en-US,en;q=0.9" },
+  });
+  const body = await response.text();
+  const title = extractHtmlTitle(body);
+
+  if (response.status === 404 || title?.includes("404 - Replit")) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (title?.includes("Sign Up - Replit")) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (body.includes('"username"') && body.toLowerCase().includes(nick.toLowerCase())) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (response.ok) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: "Replit check inconclusive",
+  };
+}
+
+export async function checkSpotify(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    `https://open.spotify.com/user/${encodeURIComponent(nick)}`,
+    { headers: { "Accept-Language": "en-US,en;q=0.9" } },
+  );
+  const body = await response.text();
+  const title = extractHtmlTitle(body);
+
+  if (
+    response.status === 404 ||
+    title === "Page not found" ||
+    body.includes("Page not found")
+  ) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (
+    title?.includes(" on Spotify") ||
+    body.includes('property="og:type" content="profile"')
+  ) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: "Spotify check inconclusive",
+  };
+}
+
 const SPECIAL_CHECKERS: Record<
   string,
   (nick: string) => Promise<CheckResult>
@@ -528,6 +837,16 @@ const SPECIAL_CHECKERS: Record<
   TikTok: checkTikTok,
   Threads: checkThreads,
   Reddit: checkReddit,
+  Discord: checkDiscord,
+  Matrix: checkMatrix,
+  "Hacker News": checkHackerNews,
+  PyPI: checkPyPI,
+  Minecraft: checkMinecraft,
+  Medium: checkMedium,
+  Substack: checkSubstack,
+  Notion: checkNotion,
+  Replit: checkReplit,
+  Spotify: checkSpotify,
 };
 
 export function getSpecialChecker(
