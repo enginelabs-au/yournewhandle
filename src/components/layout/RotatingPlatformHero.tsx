@@ -51,29 +51,25 @@ export function RotatingPlatformHero({ params }: RotatingPlatformHeroProps) {
     ],
   );
 
-  const { displayHandle, isReady, animating } = useVerifiedHeroHandles(heroParams);
-
-  const titleText = displayHandle ?? "···";
+  const { displayHandle, animating } = useVerifiedHeroHandles(heroParams);
 
   return (
     <div className="hero-section mb-4 animate-fade-in-up">
       <h1 className="hero-title mx-auto flex max-w-3xl flex-col items-center gap-3 text-center">
         <span className="hero-platform-slot inline-flex overflow-hidden font-mono text-2xl font-bold sm:text-3xl lg:text-[2.35rem]">
           <span
-            key={displayHandle ?? "loading"}
-            className={`hero-platform-word dr-title-gradient whitespace-nowrap ${animating ? "hero-platform-out" : "hero-platform-in"} ${!isReady ? "opacity-70" : ""}`}
+            key={displayHandle}
+            className={`hero-platform-word dr-title-gradient whitespace-nowrap ${animating ? "hero-platform-out" : "hero-platform-in"}`}
           >
-            {titleText}
+            {displayHandle}
           </span>
         </span>
 
-        {displayHandle ? (
-          <span className="hero-available-bubble inline-flex items-center gap-2">
-            <Check className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>{t("handleAvailable")}</span>
-            <AlertCircle className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
-          </span>
-        ) : null}
+        <span className="hero-available-bubble inline-flex items-center gap-2">
+          <Check className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>{t("handleAvailable")}</span>
+          <AlertCircle className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
+        </span>
       </h1>
 
       <p className="hero-section-description mx-auto mt-4 max-w-2xl animate-fade-in-up animation-delay-150 text-center text-sm leading-relaxed sm:text-base">

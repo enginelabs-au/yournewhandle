@@ -1,18 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HERO_COOL_HANDLES } from "@/lib/hero-handles";
-import { generateHeroBatch } from "@/lib/hero-generate";
-import { isHandleVerifiedForHero } from "@/lib/hero-verify";
+import { generateHeroBatch, generateHeroHandle } from "@/lib/hero-generate";
+import { isHandleLightAvailable } from "@/lib/hero-light-check";
 import type { GenerationParams } from "@/lib/types";
 
 export const HERO_ROTATE_MS = 2600;
 export const HERO_ANIM_MS = 280;
 
-const GENERATE_BATCH_SIZE = 8;
-const QUEUE_TARGET = 12;
-const VERIFY_CONCURRENCY = 5;
-const PUMP_IDLE_MS = 400;
+const LIST_TARGET = 8;
+const PREFETCH_WHEN_REMAINING = 3;
+const VERIFY_CONCURRENCY = 6;
+const MAX_LIST_BUILD_ROUNDS = 6;
 
 async function runPool<T>(
   items: T[],
@@ -34,159 +33,242 @@ async function runPool<T>(
   );
 }
 
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal.aborted) {
-      resolve();
-      return;
+type BuildListOptions = {
+  heroParams: GenerationParams;
+  targetCount: number;
+  signal: AbortSignal;
+  seen: Set<string>;
+  onFound?: (handle: string) => void;
+};
+
+async function buildAvailableList({
+  heroParams,
+  targetCount,
+  signal,
+  seen,
+  onFound,
+}: BuildListOptions): Promise<string[]> {
+  const available: string[] = [];
+
+  for (let round = 0; round < MAX_LIST_BUILD_ROUNDS; round += 1) {
+    if (signal.aborted || available.length >= targetCount) {
+      break;
     }
-    const timer = window.setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        window.clearTimeout(timer);
-        resolve();
+
+    const candidates = generateHeroBatch(heroParams, 12).filter((handle) => {
+      if (seen.has(handle)) {
+        return false;
+      }
+      seen.add(handle);
+      return true;
+    });
+
+    if (candidates.length === 0) {
+      continue;
+    }
+
+    await runPool(
+      candidates,
+      async (handle) => {
+        if (signal.aborted || available.length >= targetCount) {
+          return;
+        }
+
+        const ok = await isHandleLightAvailable(handle, signal);
+        if (!ok || signal.aborted) {
+          return;
+        }
+
+        available.push(handle);
+        onFound?.(handle);
       },
-      { once: true },
+      VERIFY_CONCURRENCY,
     );
-  });
+  }
+
+  return available;
 }
 
 export function useVerifiedHeroHandles(heroParams: GenerationParams) {
-  const [displayHandle, setDisplayHandle] = useState<string | null>(null);
-  const [isReady, setIsReady] = useState(false);
+  const [displayHandle, setDisplayHandle] = useState(() =>
+    generateHeroHandle(heroParams),
+  );
   const [animating, setAnimating] = useState(false);
+  const [usingVerifiedLists, setUsingVerifiedLists] = useState(false);
 
-  const queueRef = useRef<string[]>([]);
-  const displayRef = useRef<string | null>(null);
+  const heroParamsRef = useRef(heroParams);
+  heroParamsRef.current = heroParams;
+
+  const activeListRef = useRef<string[]>([]);
+  const indexRef = useRef(0);
   const seenRef = useRef<Set<string>>(new Set());
-  const coolIndexRef = useRef(0);
+  const nextListRef = useRef<Promise<string[]> | null>(null);
+  const usingVerifiedRef = useRef(false);
+  const sessionAbortRef = useRef<AbortController | null>(null);
 
-  const enqueueVerified = useCallback((handle: string) => {
-    if (seenRef.current.has(handle)) {
-      return;
-    }
-    seenRef.current.add(handle);
-
-    if (!displayRef.current) {
-      displayRef.current = handle;
-      setDisplayHandle(handle);
-      setIsReady(true);
-      return;
-    }
-
-    if (handle !== displayRef.current) {
-      queueRef.current.push(handle);
-    }
+  const rotateFallback = useCallback(() => {
+    setDisplayHandle(generateHeroHandle(heroParamsRef.current));
   }, []);
 
-  const verifyBatch = useCallback(
-    async (handles: string[], signal: AbortSignal) => {
-      await runPool(
-        handles.filter((h) => !seenRef.current.has(h)),
-        async (handle) => {
-          if (signal.aborted || seenRef.current.has(handle)) {
-            return;
-          }
-          const ok = await isHandleVerifiedForHero(handle, signal);
-          if (ok && !signal.aborted) {
-            enqueueVerified(handle);
-          }
-        },
-        VERIFY_CONCURRENCY,
-      );
-    },
-    [enqueueVerified],
-  );
+  const startNextListPrefetch = useCallback((signal: AbortSignal) => {
+    if (nextListRef.current) {
+      return;
+    }
 
-  const nextCandidateBatch = useCallback((): string[] => {
-      const batch: string[] = [];
-      const cool = [...HERO_COOL_HANDLES];
+    nextListRef.current = buildAvailableList({
+      heroParams: heroParamsRef.current,
+      targetCount: LIST_TARGET,
+      signal,
+      seen: seenRef.current,
+    })
+      .catch(() => [] as string[])
+      .finally(() => {
+        nextListRef.current = null;
+      });
+  }, []);
 
-      for (let i = 0; i < 4 && coolIndexRef.current < cool.length; i += 1) {
-        batch.push(cool[coolIndexRef.current]!);
-        coolIndexRef.current += 1;
-      }
-
-      batch.push(...generateHeroBatch(heroParams, GENERATE_BATCH_SIZE));
-      return batch.filter((h) => !seenRef.current.has(h));
-    },
-    [heroParams],
-  );
-
-  const advanceHandle = useCallback(() => {
-    while (queueRef.current.length > 0) {
-      const next = queueRef.current.shift()!;
-      if (next !== displayRef.current) {
-        displayRef.current = next;
-        setDisplayHandle(next);
+  const activateVerifiedList = useCallback(
+    (list: string[], signal: AbortSignal) => {
+      if (list.length === 0 || usingVerifiedRef.current) {
         return;
       }
+
+      activeListRef.current = list;
+      indexRef.current = 0;
+      usingVerifiedRef.current = true;
+      setUsingVerifiedLists(true);
+      setDisplayHandle(list[0]!);
+      startNextListPrefetch(signal);
+    },
+    [startNextListPrefetch],
+  );
+
+  const appendToActiveList = useCallback((handle: string) => {
+    if (!activeListRef.current.includes(handle)) {
+      activeListRef.current.push(handle);
     }
   }, []);
 
+  const advanceVerified = useCallback(async () => {
+    const list = activeListRef.current;
+    if (list.length === 0) {
+      return;
+    }
+
+    const remaining = list.length - indexRef.current - 1;
+    const signal = sessionAbortRef.current?.signal;
+    if (remaining <= PREFETCH_WHEN_REMAINING && signal && !signal.aborted) {
+      startNextListPrefetch(signal);
+    }
+
+    let nextIndex = indexRef.current + 1;
+
+    if (nextIndex >= list.length) {
+      const pending = nextListRef.current;
+      if (!pending) {
+        if (signal && !signal.aborted) {
+          startNextListPrefetch(signal);
+        }
+        return;
+      }
+
+      const nextList = await pending;
+      if (nextList.length === 0) {
+        return;
+      }
+
+      activeListRef.current = nextList;
+      indexRef.current = 0;
+      nextIndex = 0;
+
+      if (signal && !signal.aborted) {
+        startNextListPrefetch(signal);
+      }
+    }
+
+    indexRef.current = nextIndex;
+    const nextHandle = activeListRef.current[nextIndex];
+    if (nextHandle) {
+      setDisplayHandle(nextHandle);
+    }
+  }, [startNextListPrefetch]);
+
   useEffect(() => {
+    sessionAbortRef.current?.abort();
+
     const controller = new AbortController();
+    sessionAbortRef.current = controller;
     const { signal } = controller;
 
-    queueRef.current = [];
-    displayRef.current = null;
+    activeListRef.current = [];
+    indexRef.current = 0;
+    nextListRef.current = null;
     seenRef.current = new Set();
-    coolIndexRef.current = 0;
-    setDisplayHandle(null);
-    setIsReady(false);
+    usingVerifiedRef.current = false;
+    setUsingVerifiedLists(false);
+    setDisplayHandle(generateHeroHandle(heroParams));
     setAnimating(false);
 
-    async function pumpGenerated(): Promise<void> {
-      while (!signal.aborted) {
-        if (queueRef.current.length >= QUEUE_TARGET) {
-          await sleep(PUMP_IDLE_MS, signal);
-          continue;
-        }
+    void (async () => {
+      const list = await buildAvailableList({
+        heroParams,
+        targetCount: LIST_TARGET,
+        signal,
+        seen: seenRef.current,
+        onFound: (handle) => {
+          if (signal.aborted) {
+            return;
+          }
 
-        const candidates = nextCandidateBatch();
-        if (candidates.length === 0) {
-          await sleep(PUMP_IDLE_MS, signal);
-          continue;
-        }
+          if (!usingVerifiedRef.current) {
+            activateVerifiedList([handle], signal);
+            return;
+          }
 
-        await verifyBatch(candidates, signal);
-      }
-    }
+          appendToActiveList(handle);
+        },
+      });
 
-    async function pumpCoolHandles(): Promise<void> {
-      await verifyBatch([...HERO_COOL_HANDLES], signal);
-    }
-
-    void pumpCoolHandles();
-    void pumpGenerated();
-
-    return () => controller.abort();
-  }, [heroParams, nextCandidateBatch, verifyBatch]);
-
-  useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      if (queueRef.current.length === 0) {
+      if (signal.aborted) {
         return;
       }
 
+      if (list.length === 0) {
+        return;
+      }
+
+      if (!usingVerifiedRef.current) {
+        activateVerifiedList(list, signal);
+        return;
+      }
+
+      for (const handle of list) {
+        appendToActiveList(handle);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [heroParams, activateVerifiedList, appendToActiveList]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
       setAnimating(true);
       window.setTimeout(() => {
-        advanceHandle();
-        setAnimating(false);
+        if (usingVerifiedRef.current) {
+          void advanceVerified().finally(() => setAnimating(false));
+        } else {
+          rotateFallback();
+          setAnimating(false);
+        }
       }, HERO_ANIM_MS);
     }, HERO_ROTATE_MS);
 
     return () => window.clearInterval(interval);
-  }, [isReady, advanceHandle]);
+  }, [advanceVerified, rotateFallback]);
 
   return {
     displayHandle,
-    isReady,
     animating,
+    usingVerifiedLists,
   };
 }
