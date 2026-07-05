@@ -19,6 +19,8 @@ let redditQueue: Promise<void> = Promise.resolve();
 
 let redditOAuthToken: { value: string; expiresAt: number } | null = null;
 
+let productHuntToken: { value: string; expiresAt: number } | null = null;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -823,32 +825,65 @@ const LASTFM_API_KEY =
   process.env.LASTFM_API_KEY ?? "b25b959554ed76058ac220b7b2e0a026";
 
 export async function checkNpm(nick: string): Promise<CheckResult> {
-  const response = await fetchWithTimeout(
+  const pkgResponse = await fetchPlainWithTimeout(
+    `https://registry.npmjs.org/${encodeURIComponent(nick)}`,
+    { method: "HEAD", headers: { Accept: "application/json" } },
+  );
+
+  if (pkgResponse.status === 200) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  for (const field of ["maintainer", "author"] as const) {
+    const searchResponse = await fetchPlainWithTimeout(
+      `https://registry.npmjs.org/-/v1/search?text=${field}:${encodeURIComponent(nick)}&size=1`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!searchResponse.ok) {
+      continue;
+    }
+    const payload = (await searchResponse.json()) as { total?: number };
+    if ((payload.total ?? 0) > 0) {
+      return { status: AvailabilityStatus.Taken };
+    }
+  }
+
+  if (pkgResponse.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  const profileResponse = await fetchWithTimeout(
     `https://www.npmjs.com/~${encodeURIComponent(nick)}`,
     { headers: { "Accept-Language": "en-US,en;q=0.9" } },
   );
-  const body = await response.text();
+  const body = await profileResponse.text();
   const title = extractHtmlTitle(body);
 
-  const blocked = detectBlockedResponse("npm", response.status, body);
+  const blocked = detectBlockedResponse("npm", profileResponse.status, body);
   if (blocked) {
-    return { status: AvailabilityStatus.Error, errorDetail: blocked };
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: blocked,
+    };
   }
 
   if (
-    response.status === 404 ||
+    profileResponse.status === 404 ||
     (title === "npm" && !body.includes("Profile"))
   ) {
     return { status: AvailabilityStatus.Available };
   }
 
-  if (response.ok && (title?.includes("Profile") || body.includes("| Profile"))) {
+  if (
+    profileResponse.ok &&
+    (title?.includes("Profile") || body.includes("| Profile"))
+  ) {
     return { status: AvailabilityStatus.Taken };
   }
 
   return {
     status: AvailabilityStatus.Error,
-    errorDetail: `npm HTTP ${response.status}`,
+    errorDetail: `npm HTTP ${profileResponse.status}`,
   };
 }
 
@@ -927,7 +962,116 @@ export async function checkLastFm(nick: string): Promise<CheckResult> {
   };
 }
 
+async function getProductHuntAccessToken(): Promise<string | null> {
+  const direct = process.env.PRODUCTHUNT_API_TOKEN;
+  if (direct) {
+    return direct;
+  }
+
+  const clientId = process.env.PRODUCTHUNT_CLIENT_ID;
+  const clientSecret = process.env.PRODUCTHUNT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  if (productHuntToken && productHuntToken.expiresAt > Date.now() + 60_000) {
+    return productHuntToken.value;
+  }
+
+  const response = await fetchPlainWithTimeout(
+    "https://api.producthunt.com/v2/oauth/token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "client_credentials",
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+  };
+
+  if (!payload.access_token) {
+    return null;
+  }
+
+  productHuntToken = {
+    value: payload.access_token,
+    expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+  };
+
+  return productHuntToken.value;
+}
+
+async function checkProductHuntViaApi(nick: string): Promise<CheckResult | null> {
+  const token = await getProductHuntAccessToken();
+  if (!token) {
+    return null;
+  }
+
+  const response = await fetchPlainWithTimeout(
+    "https://api.producthunt.com/v2/api/graphql",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        query:
+          "query CheckUser($username: String!) { user(username: $username) { id username } }",
+        variables: { username: nick },
+      }),
+    },
+  );
+
+  const payload = (await response.json()) as {
+    data?: { user?: { id?: string } | null };
+    errors?: { error?: string; message?: string }[];
+  };
+
+  if (payload.data?.user?.id) {
+    return { status: AvailabilityStatus.Taken };
+  }
+  if (payload.data?.user === null) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (payload.errors?.length) {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail:
+        payload.errors[0]?.message ??
+        payload.errors[0]?.error ??
+        "Product Hunt API error",
+    };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `Product Hunt API HTTP ${response.status}`,
+  };
+}
+
 export async function checkProductHunt(nick: string): Promise<CheckResult> {
+  const viaApi = await checkProductHuntViaApi(nick);
+  if (viaApi) {
+    return viaApi;
+  }
+
   const response = await fetchWithTimeout(
     `https://www.producthunt.com/@${encodeURIComponent(nick)}`,
     { headers: { "Accept-Language": "en-US,en;q=0.9" } },
@@ -961,7 +1105,8 @@ export async function checkProductHunt(nick: string): Promise<CheckResult> {
 
   return {
     status: AvailabilityStatus.Error,
-    errorDetail: `Product Hunt HTTP ${response.status}`,
+    errorDetail:
+      "Product Hunt check blocked — set PRODUCTHUNT_API_TOKEN or PRODUCTHUNT_CLIENT_ID/SECRET",
   };
 }
 
