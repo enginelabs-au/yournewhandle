@@ -672,46 +672,36 @@ export async function checkMinecraft(nick: string): Promise<CheckResult> {
 }
 
 export async function checkMedium(nick: string): Promise<CheckResult> {
-  const response = await fetchWithTimeout(`https://medium.com/@${encodeURIComponent(nick)}`, {
-    headers: { "Accept-Language": "en-US,en;q=0.9" },
-  });
-  const body = await response.text();
-
-  const blocked = detectBlockedResponse("Medium", response.status, body);
-  if (blocked) {
-    return { status: AvailabilityStatus.Error, errorDetail: blocked };
-  }
-
-  if (
-    body.includes("Out of nothing, something.") ||
-    body.includes("404")
-  ) {
-    return { status: AvailabilityStatus.Available };
-  }
-
-  const title = extractHtmlTitle(body);
-  if (!title || title === "Medium" || title.startsWith("Medium: Error")) {
-    return { status: AvailabilityStatus.Available };
-  }
-  if (title.includes("Medium")) {
-    return { status: AvailabilityStatus.Taken };
-  }
+  const response = await fetchPlainWithTimeout(
+    `https://medium.com/feed/@${encodeURIComponent(nick)}`,
+    { headers: { Accept: "application/rss+xml, application/xml, text/xml, */*" } },
+  );
 
   if (response.status === 404) {
     return { status: AvailabilityStatus.Available };
   }
 
+  if (response.ok) {
+    const body = await response.text();
+    if (body.includes("<rss") || body.includes("<feed")) {
+      return { status: AvailabilityStatus.Taken };
+    }
+  }
+
   return {
     status: AvailabilityStatus.Error,
-    errorDetail: "Medium check inconclusive",
+    errorDetail: `Medium feed HTTP ${response.status}`,
   };
 }
 
 export async function checkSubstack(nick: string): Promise<CheckResult> {
-  const response = await fetchWithTimeout(`https://${encodeURIComponent(nick)}.substack.com`, {
-    redirect: "manual",
-    headers: { "Accept-Language": "en-US,en;q=0.9" },
-  });
+  const response = await fetchPlainWithTimeout(
+    `https://${encodeURIComponent(nick)}.substack.com`,
+    {
+      redirect: "manual",
+      headers: { "Accept-Language": "en-US,en;q=0.9" },
+    },
+  );
 
   if (response.status === 404) {
     return { status: AvailabilityStatus.Available };

@@ -69,7 +69,7 @@ export async function checkPlatformService(
     return { error: "Unknown service", status: 404 };
   }
 
-  const cacheKey = `v11:${normalized}:${service}`;
+  const cacheKey = `v12:${normalized}:${service}`;
   const cached = getNickCheckCache<{
     status: CheckStatus;
     message?: string;
