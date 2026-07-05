@@ -372,6 +372,13 @@ function CheckoutStatusBannerInner() {
   const searchParams = useSearchParams();
   const checkout = searchParams.get("checkout");
   const sessionId = searchParams.get("session_id");
+  const [showCancelled] = useState(() => checkout === "cancelled");
+
+  useEffect(() => {
+    if (checkout === "cancelled") {
+      window.history.replaceState(null, "", "/developers");
+    }
+  }, [checkout]);
 
   if (checkout === "success" && sessionId) {
     return (
@@ -381,7 +388,7 @@ function CheckoutStatusBannerInner() {
     );
   }
 
-  if (checkout === "cancelled") {
+  if (showCancelled) {
     return (
       <section className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-dr-muted">
         Checkout was cancelled. Choose a plan below when you are ready.
