@@ -14,7 +14,7 @@ import {
   API_V1_PREFIX,
   API_VERSION,
 } from "@/lib/api/docs-spec";
-import { API_PLAN_LIMITS, API_PLAN_PRICING } from "@/lib/api/plans";
+import { API_PLAN_LIMITS, API_PLAN_PRICING, ENTERPRISE_USAGE_TIERS } from "@/lib/api/plans";
 import { PLATFORM_COUNT } from "@/lib/platforms-registry";
 
 function CodeBlock({ children }: { children: string }) {
@@ -188,8 +188,27 @@ export function ApiDocsPage() {
                     {API_PLAN_PRICING[plan].description}
                   </p>
                   <ul className="mt-3 flex-1 space-y-1 text-[11px] text-dr-muted">
-                    <li>{API_PLAN_LIMITS[plan].requestsPerDay.toLocaleString()} req/day</li>
-                    <li>{API_PLAN_LIMITS[plan].requestsPerMinute} req/min</li>
+                    {plan === "enterprise" ? (
+                      <>
+                        <li className="font-medium text-zinc-300">Platform fee: $199/mo</li>
+                        <li className="pt-1 font-medium text-zinc-300">Usage (graduated, billed monthly):</li>
+                        {ENTERPRISE_USAGE_TIERS.map((tier) => (
+                          <li key={tier.label} className="pl-2">
+                            <span className="text-zinc-400">{tier.label}:</span> {tier.detail}
+                          </li>
+                        ))}
+                        <li className="pt-1 font-medium text-zinc-300">API rate limits:</li>
+                        <li className="pl-2">
+                          {API_PLAN_LIMITS.enterprise.requestsPerMinute} req/min ·{" "}
+                          {API_PLAN_LIMITS.enterprise.requestsPerDay.toLocaleString()} req/day max
+                        </li>
+                      </>
+                    ) : (
+                      <>
+                        <li>{API_PLAN_LIMITS[plan].requestsPerDay.toLocaleString()} req/day</li>
+                        <li>{API_PLAN_LIMITS[plan].requestsPerMinute} req/min</li>
+                      </>
+                    )}
                     <li>
                       Batch: {API_PLAN_LIMITS[plan].maxBatchHandles} handles ×{" "}
                       {API_PLAN_LIMITS[plan].maxBatchPlatforms} platforms
@@ -205,7 +224,7 @@ export function ApiDocsPage() {
                     plan={plan}
                     label={
                       plan === "enterprise"
-                        ? "Subscribe — usage-based"
+                        ? "Subscribe — $199/mo + usage"
                         : `Subscribe — ${API_PLAN_PRICING[plan].price}`
                     }
                   />
