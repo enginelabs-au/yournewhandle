@@ -61,9 +61,13 @@ export function ApiNavMenu() {
                 Generate handles &amp; check availability programmatically
               </p>
             </div>
-            <span className="dr-badge-new shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide">
-              Pro
-            </span>
+            <Link
+              href="/developers#plans"
+              onClick={() => setOpen(false)}
+              className="dr-badge-new shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide transition-opacity hover:opacity-90"
+            >
+              API Key
+            </Link>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

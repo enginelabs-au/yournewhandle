@@ -172,6 +172,28 @@ export function ApiDocsPage() {
               title="Plans & limits"
               description={API_DOC_SECTIONS.find((s) => s.id === "plans")?.description}
             />
+            <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/15 p-4 text-sm text-dr-muted">
+              <p className="font-medium text-zinc-200">Getting your API key</p>
+              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed">
+                <li>Choose a plan below and complete Stripe Checkout.</li>
+                <li>
+                  After payment, your key appears on the success page (starts with{" "}
+                  <code className="text-zinc-300">ynh_live_</code>). Copy it immediately — it is
+                  shown once.
+                </li>
+                <li>
+                  Send it on every request:{" "}
+                  <code className="text-zinc-300">Authorization: Bearer YOUR_API_KEY</code>
+                </li>
+                <li>
+                  Manage billing or cancel anytime via{" "}
+                  <a href="#manage-billing" className="text-dr-blue-light hover:underline">
+                    Manage billing
+                  </a>{" "}
+                  at the bottom of this page (use the email from checkout).
+                </li>
+              </ol>
+            </div>
             <div className="grid gap-4 sm:grid-cols-3">
               {(["starter", "pro", "enterprise"] as const).map((plan) => (
                 <div
@@ -363,7 +385,7 @@ X-RateLimit-Remaining-Day: 24818`}</CodeBlock>
 
           <CheckoutStatusBanner />
 
-          <section className="rounded-2xl border border-cyan-500/25 bg-cyan-950/20 p-6 text-center">
+          <section id="manage-billing" className="scroll-mt-28 rounded-2xl border border-cyan-500/25 bg-cyan-950/20 p-6 text-center">
             <h2 className="text-lg font-semibold text-zinc-100">Manage billing</h2>
             <p className="mx-auto mt-2 max-w-lg text-sm text-dr-muted">
               Update your card, view invoices, or cancel your subscription in the

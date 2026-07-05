@@ -43,7 +43,8 @@ export const API_DOC_SECTIONS: ApiDocSection[] = [
   {
     id: "plans",
     title: "Plans & limits",
-    description: "Starter, Pro, and Enterprise tiers with per-minute and daily quotas.",
+    description:
+      "Subscribe via Stripe Checkout to receive your API key. Starter, Pro, and Enterprise tiers with per-minute and daily quotas.",
   },
   {
     id: "rate-limits",
@@ -272,6 +273,7 @@ export const API_NAV_GROUPS = [
     title: "Getting started",
     links: [
       { label: "Overview", href: "/developers#overview" },
+      { label: "API Key", href: "/developers#plans" },
       { label: "Authentication", href: "/developers#authentication" },
       { label: "Plans", href: "/developers#plans" },
       { label: "Rate limits", href: "/developers#rate-limits" },
