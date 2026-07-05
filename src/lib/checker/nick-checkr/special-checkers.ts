@@ -818,6 +818,153 @@ export async function checkSpotify(nick: string): Promise<CheckResult> {
   };
 }
 
+/** Last.fm web client key; override with LASTFM_API_KEY for production rate limits. */
+const LASTFM_API_KEY =
+  process.env.LASTFM_API_KEY ?? "b25b959554ed76058ac220b7b2e0a026";
+
+export async function checkNpm(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(
+    `https://www.npmjs.com/~${encodeURIComponent(nick)}`,
+    { headers: { "Accept-Language": "en-US,en;q=0.9" } },
+  );
+  const body = await response.text();
+  const title = extractHtmlTitle(body);
+
+  const blocked = detectBlockedResponse("npm", response.status, body);
+  if (blocked) {
+    return { status: AvailabilityStatus.Error, errorDetail: blocked };
+  }
+
+  if (
+    response.status === 404 ||
+    (title === "npm" && !body.includes("Profile"))
+  ) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (response.ok && (title?.includes("Profile") || body.includes("| Profile"))) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `npm HTTP ${response.status}`,
+  };
+}
+
+export async function checkChessCom(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    `https://api.chess.com/pub/player/${encodeURIComponent(nick)}`,
+    { headers: { Accept: "application/json" } },
+  );
+  const body = await response.text();
+
+  let payload: { code?: number; message?: string; player_id?: number; "@id"?: string };
+  try {
+    payload = JSON.parse(body) as typeof payload;
+  } catch {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: "Chess.com API returned invalid JSON",
+    };
+  }
+
+  if (
+    payload.code === 0 &&
+    payload.message?.toLowerCase().includes("not found")
+  ) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (payload.player_id || payload["@id"]) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (response.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `Chess.com API HTTP ${response.status}`,
+  };
+}
+
+export async function checkLastFm(nick: string): Promise<CheckResult> {
+  const url = new URL("https://ws.audioscrobbler.com/2.0/");
+  url.searchParams.set("method", "user.getinfo");
+  url.searchParams.set("user", nick);
+  url.searchParams.set("api_key", LASTFM_API_KEY);
+  url.searchParams.set("format", "json");
+
+  const response = await fetchPlainWithTimeout(url.toString(), {
+    headers: { Accept: "application/json" },
+  });
+  const payload = (await response.json()) as {
+    user?: { name?: string };
+    error?: number;
+    message?: string;
+  };
+
+  if (payload.error === 6 || payload.message === "User not found") {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (payload.user?.name) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (payload.error === 10) {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: "Last.fm API key invalid — set LASTFM_API_KEY",
+    };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: payload.message ?? `Last.fm HTTP ${response.status}`,
+  };
+}
+
+export async function checkProductHunt(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(
+    `https://www.producthunt.com/@${encodeURIComponent(nick)}`,
+    { headers: { "Accept-Language": "en-US,en;q=0.9" } },
+  );
+  const body = await response.text();
+
+  const blocked = detectBlockedResponse("Product Hunt", response.status, body);
+  if (blocked) {
+    return { status: AvailabilityStatus.Error, errorDetail: blocked };
+  }
+
+  if (response.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  const title = extractHtmlTitle(body);
+  if (
+    response.ok &&
+    (title?.includes("profile on Product Hunt") ||
+      body.includes("profile on Product Hunt"))
+  ) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (
+    title?.includes("The best new products in tech") &&
+    !body.includes("profile on Product Hunt")
+  ) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: `Product Hunt HTTP ${response.status}`,
+  };
+}
+
 const SPECIAL_CHECKERS: Record<
   string,
   (nick: string) => Promise<CheckResult>
@@ -837,6 +984,10 @@ const SPECIAL_CHECKERS: Record<
   Notion: checkNotion,
   Replit: checkReplit,
   Spotify: checkSpotify,
+  npm: checkNpm,
+  "Chess.com": checkChessCom,
+  "Last.fm": checkLastFm,
+  "Product Hunt": checkProductHunt,
 };
 
 export function getSpecialChecker(
