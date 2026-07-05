@@ -194,13 +194,17 @@ function parseFacebookHtml(body: string, status: number): CheckResult {
     return { status: AvailabilityStatus.Taken };
   }
 
-  if (body.includes("profile_picture")) {
+  if (
+    body.includes("profile_header") ||
+    body.includes("cover_photo") ||
+    body.includes("is_viewer_friend")
+  ) {
     return { status: AvailabilityStatus.Taken };
   }
 
   // Meta datacenter responses often omit the unavailable banner but still
   // return an empty shell with userID 0 and no profile assets.
-  if (/"userID":0\b/.test(body)) {
+  if (/"userID":0\b/.test(body) && !body.includes("profile_header")) {
     return { status: AvailabilityStatus.Available };
   }
 
@@ -211,9 +215,30 @@ function parseFacebookHtml(body: string, status: number): CheckResult {
 }
 
 export async function checkFacebook(nick: string): Promise<CheckResult> {
-  const response = await fetchWithTimeout(`https://www.facebook.com/${encodeURIComponent(nick)}`, {
-    headers: { "Accept-Language": "en-US,en;q=0.9" },
+  const url = `https://www.facebook.com/${encodeURIComponent(nick)}`;
+  const headers = { "Accept-Language": "en-US,en;q=0.9" };
+
+  const manual = await fetchWithTimeout(url, {
+    redirect: "manual",
+    headers,
   });
+
+  if (manual.status === 301 || manual.status === 302) {
+    const location = manual.headers.get("location") ?? "";
+    if (location.includes("login.php") || location.includes("/login")) {
+      return { status: AvailabilityStatus.Taken };
+    }
+  }
+
+  if (manual.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  const response =
+    manual.status === 200
+      ? manual
+      : await fetchWithTimeout(url, { headers });
+
   const body = await response.text();
   return parseFacebookHtml(body, response.status);
 }
