@@ -49,7 +49,7 @@ export function Dashboard() {
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [shufflePresetId, setShufflePresetId] = useState<string | null>(null);
   const pendingBatchCheck = useRef(false);
-  const [lengthHardLock, setLengthHardLock] = useState(true);
+  const [lengthHardLock, setLengthHardLock] = useState(false);
 
   useEffect(() => {
     if (!hydrated) {
@@ -57,14 +57,15 @@ export function Dashboard() {
     }
     try {
       const stored = localStorage.getItem("ynh:length-hard-lock");
-      if (stored === "0") {
-        setLengthHardLock(false);
-        if (params.minLen === params.maxLen) {
-          updateParams({
-            minLen: WORKFLOW_LENGTH_MIN,
-            maxLen: clampLengthForWorkflow(params.maxLen),
-          });
+      const locked = stored === "1";
+      setLengthHardLock(locked);
+      const len = clampLengthForWorkflow(params.maxLen);
+      if (locked) {
+        if (params.minLen !== len || params.maxLen !== len) {
+          updateParams({ minLen: len, maxLen: len });
         }
+      } else if (params.minLen === params.maxLen) {
+        updateParams({ minLen: WORKFLOW_LENGTH_MIN, maxLen: len });
       }
     } catch {
       // ignore storage errors
