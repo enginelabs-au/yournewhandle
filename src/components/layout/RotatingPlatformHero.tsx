@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { AlertCircle, Check, Loader2 } from "lucide-react";
+import { AlertCircle, Check } from "lucide-react";
 import { useAppPreferences } from "@/context/AppPreferencesProvider";
 import { useVerifiedHeroHandles } from "@/hooks/useVerifiedHeroHandles";
 import { PLATFORM_COUNT } from "@/lib/platforms-registry";
@@ -51,8 +51,7 @@ export function RotatingPlatformHero({ params }: RotatingPlatformHeroProps) {
     ],
   );
 
-  const { displayHandle, isReady, animating, isVerifying } =
-    useVerifiedHeroHandles(heroParams);
+  const { displayHandle, isReady, animating } = useVerifiedHeroHandles(heroParams);
 
   const titleText = displayHandle ?? "···";
 
@@ -62,26 +61,22 @@ export function RotatingPlatformHero({ params }: RotatingPlatformHeroProps) {
         <span className="hero-platform-slot inline-flex overflow-hidden font-mono text-2xl font-bold sm:text-3xl lg:text-[2.35rem]">
           <span
             key={displayHandle ?? "loading"}
-            className={`hero-platform-word dr-title-gradient whitespace-nowrap ${animating ? "hero-platform-out" : "hero-platform-in"} ${isVerifying ? "opacity-60" : ""}`}
+            className={`hero-platform-word dr-title-gradient whitespace-nowrap ${animating ? "hero-platform-out" : "hero-platform-in"} ${!isReady ? "opacity-70" : ""}`}
           >
             {titleText}
           </span>
         </span>
 
-        <span className="hero-available-bubble inline-flex items-center gap-2">
-          {isVerifying ? (
-            <Loader2 className="hero-available-icon h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
-          ) : (
+        {displayHandle ? (
+          <span className="hero-available-bubble inline-flex items-center gap-2">
             <Check className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
-          )}
-          <span>{isVerifying ? t("running") : t("handleAvailable")}</span>
-          {!isVerifying ? (
+            <span>{t("handleAvailable")}</span>
             <AlertCircle className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
-          ) : null}
-        </span>
+          </span>
+        ) : null}
       </h1>
 
-      <p className="mx-auto mt-4 max-w-2xl animate-fade-in-up animation-delay-150 text-center text-sm leading-relaxed text-dr-muted sm:text-base">
+      <p className="hero-section-description mx-auto mt-4 max-w-2xl animate-fade-in-up animation-delay-150 text-center text-sm leading-relaxed sm:text-base">
         {t("heroDescription", { count: PLATFORM_COUNT })}
       </p>
     </div>
