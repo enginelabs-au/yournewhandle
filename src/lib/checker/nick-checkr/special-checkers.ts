@@ -165,6 +165,36 @@ function facebookProfileUserId(body: string): string | null {
   return null;
 }
 
+function facebookHasRealProfile(body: string): boolean {
+  const profileUserId = facebookProfileUserId(body);
+  if (profileUserId) {
+    return true;
+  }
+
+  if (
+    body.includes("ProfileCometHeaderQuery") &&
+    body.includes("profile_header")
+  ) {
+    return true;
+  }
+
+  if (body.includes("profile_header") && body.includes("cover_photo")) {
+    return true;
+  }
+
+  const title = extractFacebookTitle(body);
+  if (
+    title &&
+    title !== "Facebook" &&
+    !title.startsWith("Log in") &&
+    !title.includes("Error")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function parseFacebookHtml(body: string, status: number): CheckResult {
   const blocked = detectBlockedResponse("Facebook", status, body);
   if (blocked) {
@@ -175,30 +205,7 @@ function parseFacebookHtml(body: string, status: number): CheckResult {
     return { status: AvailabilityStatus.Available };
   }
 
-  const profileUserId = facebookProfileUserId(body);
-  if (profileUserId) {
-    return { status: AvailabilityStatus.Taken };
-  }
-
-  if (body.includes("entity_id") || body.includes("userVanity")) {
-    return { status: AvailabilityStatus.Taken };
-  }
-
-  const title = extractFacebookTitle(body);
-  if (
-    title &&
-    title !== "Facebook" &&
-    !title.startsWith("Log in") &&
-    !title.includes("Error")
-  ) {
-    return { status: AvailabilityStatus.Taken };
-  }
-
-  if (
-    body.includes("profile_header") ||
-    body.includes("cover_photo") ||
-    body.includes("is_viewer_friend")
-  ) {
+  if (facebookHasRealProfile(body)) {
     return { status: AvailabilityStatus.Taken };
   }
 
@@ -210,6 +217,39 @@ function parseFacebookHtml(body: string, status: number): CheckResult {
     status: AvailabilityStatus.Error,
     errorDetail: "Facebook check inconclusive",
   };
+}
+
+function facebookRedirectImpliesTaken(
+  location: string,
+  nick: string,
+  profileUrl: string,
+): boolean {
+  if (!location) {
+    return false;
+  }
+
+  if (
+    location.includes("login.php") &&
+    facebookLoginRedirectTargetsProfile(location, nick)
+  ) {
+    return true;
+  }
+
+  try {
+    const resolved = new URL(location, profileUrl);
+    if (!resolved.hostname.includes("facebook.com")) {
+      return false;
+    }
+
+    const segment = resolved.pathname.replace(/\/$/, "").split("/").filter(Boolean)[0];
+    if (segment && segment.toLowerCase() === nick.toLowerCase()) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
 }
 
 function facebookLoginRedirectTargetsProfile(
@@ -239,10 +279,7 @@ export async function checkFacebook(nick: string): Promise<CheckResult> {
 
   if (manual.status === 301 || manual.status === 302) {
     const location = manual.headers.get("location") ?? "";
-    if (
-      location.includes("login.php") &&
-      facebookLoginRedirectTargetsProfile(location, nick)
-    ) {
+    if (facebookRedirectImpliesTaken(location, nick, url)) {
       return { status: AvailabilityStatus.Taken };
     }
   }
@@ -257,7 +294,16 @@ export async function checkFacebook(nick: string): Promise<CheckResult> {
       : await fetchWithTimeout(url, { headers });
 
   const body = await response.text();
-  return parseFacebookHtml(body, response.status);
+  const parsed = parseFacebookHtml(body, response.status);
+  if (parsed.status !== AvailabilityStatus.Error) {
+    return parsed;
+  }
+
+  // Some datacenter responses omit markers on www; try mobile HTML once.
+  const mobileUrl = `https://m.facebook.com/${encodeURIComponent(nick)}`;
+  const mobile = await fetchWithTimeout(mobileUrl, { headers });
+  const mobileBody = await mobile.text();
+  return parseFacebookHtml(mobileBody, mobile.status);
 }
 
 export async function checkThreads(nick: string): Promise<CheckResult> {
