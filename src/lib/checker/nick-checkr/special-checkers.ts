@@ -7,7 +7,8 @@ import {
 import { detectBlockedResponse } from "@/lib/checker/nick-checkr/blocked-detection";
 
 const TIMEOUT_MS = 10_000;
-const REDDIT_MIN_INTERVAL_MS = 2_500;
+const REDDIT_MIN_INTERVAL_MS = 3_000;
+const REDDIT_USER_AGENT = "yournewhandle/1.0 (by /u/yournewhandle)";
 const impit = new Impit({ browser: "chrome" });
 
 /** Public web app id used by Instagram's logged-out web_profile_info endpoint. */
@@ -140,29 +141,66 @@ export async function checkInstagram(nick: string): Promise<CheckResult> {
   return parseInstagramHtml(htmlBody, htmlResponse.status);
 }
 
-export async function checkFacebook(nick: string): Promise<CheckResult> {
-  const response = await fetchWithTimeout(`https://www.facebook.com/${encodeURIComponent(nick)}`, {
-    headers: { "Accept-Language": "en-US,en;q=0.9" },
-  });
-  const body = await response.text();
+function extractFacebookTitle(body: string): string | null {
+  return body.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim() ?? null;
+}
 
-  const blocked = detectBlockedResponse("Facebook", response.status, body);
+function facebookUnavailableMarkers(body: string): boolean {
+  return (
+    body.includes("This content isn't available") ||
+    body.includes("This content isn\\u0027t available") ||
+    body.includes("This page isn't available") ||
+    body.includes("This page isn\\u0027t available") ||
+    body.includes("Page Not Found") ||
+    body.includes("page you requested cannot be displayed")
+  );
+}
+
+/** Non-zero profile id embedded in Meta's boot payload. */
+function facebookProfileUserId(body: string): string | null {
+  const quoted = body.match(/"userID":"(\d+)"/);
+  if (quoted?.[1] && quoted[1] !== "0") {
+    return quoted[1];
+  }
+  return null;
+}
+
+function parseFacebookHtml(body: string, status: number): CheckResult {
+  const blocked = detectBlockedResponse("Facebook", status, body);
   if (blocked) {
     return { status: AvailabilityStatus.Error, errorDetail: blocked };
   }
 
-  if (
-    body.includes("This content isn't available") ||
-    body.includes("This page isn't available")
-  ) {
+  if (facebookUnavailableMarkers(body) || status === 404) {
     return { status: AvailabilityStatus.Available };
   }
 
-  if (body.includes("entity_id")) {
+  const profileUserId = facebookProfileUserId(body);
+  if (profileUserId) {
     return { status: AvailabilityStatus.Taken };
   }
 
-  if (response.status === 404) {
+  if (body.includes("entity_id") || body.includes("userVanity")) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  const title = extractFacebookTitle(body);
+  if (
+    title &&
+    title !== "Facebook" &&
+    !title.startsWith("Log in") &&
+    !title.includes("Error")
+  ) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (body.includes("profile_picture")) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  // Meta datacenter responses often omit the unavailable banner but still
+  // return an empty shell with userID 0 and no profile assets.
+  if (/"userID":0\b/.test(body)) {
     return { status: AvailabilityStatus.Available };
   }
 
@@ -170,6 +208,14 @@ export async function checkFacebook(nick: string): Promise<CheckResult> {
     status: AvailabilityStatus.Error,
     errorDetail: "Facebook check inconclusive",
   };
+}
+
+export async function checkFacebook(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(`https://www.facebook.com/${encodeURIComponent(nick)}`, {
+    headers: { "Accept-Language": "en-US,en;q=0.9" },
+  });
+  const body = await response.text();
+  return parseFacebookHtml(body, response.status);
 }
 
 export async function checkThreads(nick: string): Promise<CheckResult> {
@@ -236,7 +282,7 @@ async function getRedditOAuthToken(): Promise<string | null> {
     headers: {
       Authorization: `Basic ${credentials}`,
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "yournewhandle/1.0",
+      "User-Agent": REDDIT_USER_AGENT,
     },
     body: "grant_type=client_credentials",
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -263,16 +309,58 @@ async function getRedditOAuthToken(): Promise<string | null> {
   return payload.access_token;
 }
 
+async function checkRedditUsernameAvailable(
+  nick: string,
+  token: string,
+): Promise<CheckResult | null> {
+  const params = new URLSearchParams({ user: nick });
+  const response = await fetch(
+    `https://oauth.reddit.com/api/username_available?${params.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": REDDIT_USER_AGENT,
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    },
+  );
+
+  if (!response.ok) {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: `Reddit OAuth HTTP ${response.status}`,
+    };
+  }
+
+  const payload = (await response.json()) as boolean | { available?: boolean };
+  const available =
+    typeof payload === "boolean" ? payload : payload.available === true;
+
+  return {
+    status: available
+      ? AvailabilityStatus.Available
+      : AvailabilityStatus.Taken,
+  };
+}
+
 async function checkRedditOAuth(nick: string): Promise<CheckResult | null> {
   const token = await getRedditOAuthToken();
   if (!token) {
     return null;
   }
 
+  const availability = await checkRedditUsernameAvailable(nick, token);
+  if (
+    availability &&
+    availability.status !== AvailabilityStatus.Error
+  ) {
+    return availability;
+  }
+
   const response = await fetch(`https://oauth.reddit.com/user/${nick}/about`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "yournewhandle/1.0",
+      "User-Agent": REDDIT_USER_AGENT,
     },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
@@ -288,10 +376,7 @@ async function checkRedditOAuth(nick: string): Promise<CheckResult | null> {
     }
   }
 
-  return {
-    status: AvailabilityStatus.Error,
-    errorDetail: `Reddit OAuth HTTP ${response.status}`,
-  };
+  return availability;
 }
 
 async function fetchRedditRss(nick: string): Promise<{ status: number; body: string }> {
@@ -309,6 +394,11 @@ async function fetchRedditRss(nick: string): Promise<{ status: number; body: str
 }
 
 export async function checkReddit(nick: string): Promise<CheckResult> {
+  const oauthResult = await checkRedditOAuth(nick);
+  if (oauthResult && oauthResult.status !== AvailabilityStatus.Error) {
+    return oauthResult;
+  }
+
   let rss = await fetchRedditRss(nick);
   let parsed = parseRedditRss(nick, rss.status, rss.body);
   if (parsed) {
@@ -324,7 +414,6 @@ export async function checkReddit(nick: string): Promise<CheckResult> {
     }
   }
 
-  const oauthResult = await checkRedditOAuth(nick);
   if (oauthResult) {
     return oauthResult;
   }
@@ -332,7 +421,7 @@ export async function checkReddit(nick: string): Promise<CheckResult> {
   if (rss.status === 429 || rss.status === 403) {
     return {
       status: AvailabilityStatus.Error,
-      errorDetail: "Reddit rate limited",
+      errorDetail: "Reddit rate limited — add REDDIT_CLIENT_ID/SECRET for reliable checks",
     };
   }
 
