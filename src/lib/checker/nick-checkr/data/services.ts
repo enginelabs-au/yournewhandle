@@ -87,9 +87,6 @@ export const services: ServiceDefinition[] = [
   { name: 'Roblox', url: 'https://www.roblox.com/user.aspx?username={}', category: 'Gaming', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Minecraft', url: 'https://namemc.com/profile/{}', category: 'Gaming', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
 
-  // Professional
-  { name: 'Product Hunt', url: 'https://www.producthunt.com/@{}', category: 'Professional', checkMethod: CheckMethod.BodyMatch, bodyMatch: 'Product Hunt is a curation of the best new products', testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
-  { name: 'About.me', url: 'https://about.me/{}', category: 'Professional', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Linktree', url: 'https://linktr.ee/{}', category: 'Professional', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Gumroad', url: 'https://www.gumroad.com/{}', category: 'Professional', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Patreon', url: 'https://www.patreon.com/{}', category: 'Professional', checkMethod: CheckMethod.Standard, testTakenNick: 'juicyscoop', testAvailableNick: 'juicyscoop3232asdock' },
