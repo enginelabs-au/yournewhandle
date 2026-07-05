@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ApiDocsPage } from "@/components/developers/ApiDocsPage";
+import { ApiDocsPageWithSuspense } from "@/components/developers/ApiDocsPage";
 
 export const metadata: Metadata = {
   title: "API Documentation — yournewhandle",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function DevelopersPage() {
-  return <ApiDocsPage />;
+  return <ApiDocsPageWithSuspense />;
 }

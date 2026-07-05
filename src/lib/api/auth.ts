@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { lookupApiKey, apiKeysConfiguredCount, type ApiKeyRecord } from "@/lib/api/keys";
+import { lookupApiKey, isApiEnabled, type ApiKeyRecord } from "@/lib/api/keys";
 import { enforceRateLimit, type RateLimitResult } from "@/lib/api/rate-limit";
 import { API_PLAN_LIMITS, type ApiPlan } from "@/lib/api/plans";
 
@@ -74,10 +74,10 @@ export async function authenticateApiRequest(
   request: Request,
 ): Promise<ApiAuthContext | NextResponse> {
   const token = extractBearerToken(request);
-  const key = lookupApiKey(token);
+  const key = await lookupApiKey(token);
 
   if (!key) {
-    if (apiKeysConfiguredCount() === 0) {
+    if (!isApiEnabled()) {
       return apiDisabledResponse();
     }
     return unauthorizedResponse();
@@ -88,6 +88,15 @@ export async function authenticateApiRequest(
 
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit);
+  }
+
+  if (token && key.plan === "enterprise") {
+    const { getStripeCustomerIdForSecret } = await import("@/lib/api/key-store");
+    const { reportApiMeterEvent } = await import("@/lib/api/meter-usage");
+    const customerId = await getStripeCustomerIdForSecret(token);
+    if (customerId) {
+      void reportApiMeterEvent(customerId, 1);
+    }
   }
 
   return {

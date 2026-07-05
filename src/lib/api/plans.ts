@@ -56,7 +56,7 @@ export const API_PLAN_PRICING: Record<
   },
   enterprise: {
     label: "Enterprise",
-    price: "Custom",
-    description: "High volume, SLA, dedicated support.",
+    price: "Usage-based",
+    description: "Graduated usage pricing, high limits, SLA, dedicated support.",
   },
 };

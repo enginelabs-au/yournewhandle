@@ -1,4 +1,6 @@
 import type { ApiPlan } from "@/lib/api/plans";
+import { lookupStoredApiKey } from "@/lib/api/key-store";
+import { isStripeConfigured } from "@/lib/stripe/config";
 
 export type ApiKeyRecord = {
   id: string;
@@ -22,7 +24,7 @@ function keyIdFromSecret(secret: string): string {
 
 let cachedKeys: Map<string, ApiKeyRecord> | null = null;
 
-function loadKeys(): Map<string, ApiKeyRecord> {
+function loadEnvKeys(): Map<string, ApiKeyRecord> {
   if (cachedKeys) {
     return cachedKeys;
   }
@@ -58,18 +60,34 @@ function loadKeys(): Map<string, ApiKeyRecord> {
   return map;
 }
 
-export function lookupApiKey(secret: string | null): ApiKeyRecord | null {
+export function lookupEnvApiKey(secret: string | null): ApiKeyRecord | null {
   if (!secret) {
     return null;
   }
 
-  return loadKeys().get(secret) ?? null;
+  return loadEnvKeys().get(secret) ?? null;
+}
+
+export async function lookupApiKey(secret: string | null): Promise<ApiKeyRecord | null> {
+  if (!secret) {
+    return null;
+  }
+
+  const envKey = lookupEnvApiKey(secret);
+  if (envKey) {
+    return envKey;
+  }
+
+  return lookupStoredApiKey(secret);
 }
 
 export function isApiEnabled(): boolean {
-  return loadKeys().size > 0;
+  if (loadEnvKeys().size > 0) {
+    return true;
+  }
+  return isStripeConfigured();
 }
 
 export function apiKeysConfiguredCount(): number {
-  return loadKeys().size;
+  return loadEnvKeys().size;
 }

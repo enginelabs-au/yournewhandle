@@ -1,9 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { DnsRobotHeader } from "@/components/layout/DnsRobotHeader";
 import { DnsRobotFooter } from "@/components/layout/DnsRobotFooter";
+import { ApiBillingPortal } from "@/components/developers/ApiBillingPortal";
+import { ApiCheckoutSuccess } from "@/components/developers/ApiCheckoutSuccess";
+import { ApiSubscribeButton } from "@/components/developers/ApiSubscribeButton";
 import {
   API_DOC_ENDPOINTS,
   API_DOC_SECTIONS,
@@ -158,12 +161,8 @@ export function ApiDocsPage() {
             </p>
             <CodeBlock>{`Authorization: Bearer ynh_live_your_secret_key`}</CodeBlock>
             <p className="text-sm text-dr-muted">
-              Keys are issued per plan. Contact{" "}
-              <a href="mailto:hello@yournewhandle.com" className="text-dr-blue-light hover:underline">
-                hello@yournewhandle.com
-              </a>{" "}
-              to subscribe, or configure keys via{" "}
-              <code className="text-zinc-300">YNH_API_KEYS</code> for self-hosted deployments.
+              Subscribe via Stripe Checkout. Your API key appears on the success page
+              after payment and is tied to your subscription.
             </p>
           </section>
 
@@ -177,7 +176,7 @@ export function ApiDocsPage() {
               {(["starter", "pro", "enterprise"] as const).map((plan) => (
                 <div
                   key={plan}
-                  className="rounded-xl border border-dr-border bg-[rgb(12_16_28/0.5)] p-4"
+                  className="flex flex-col rounded-xl border border-dr-border bg-[rgb(12_16_28/0.5)] p-4"
                 >
                   <p className="text-sm font-semibold text-zinc-100">
                     {API_PLAN_PRICING[plan].label}
@@ -188,7 +187,7 @@ export function ApiDocsPage() {
                   <p className="mt-2 text-xs text-dr-muted">
                     {API_PLAN_PRICING[plan].description}
                   </p>
-                  <ul className="mt-3 space-y-1 text-[11px] text-dr-muted">
+                  <ul className="mt-3 flex-1 space-y-1 text-[11px] text-dr-muted">
                     <li>{API_PLAN_LIMITS[plan].requestsPerDay.toLocaleString()} req/day</li>
                     <li>{API_PLAN_LIMITS[plan].requestsPerMinute} req/min</li>
                     <li>
@@ -202,6 +201,14 @@ export function ApiDocsPage() {
                       AI generate: {API_PLAN_LIMITS[plan].allowAiGenerate ? "Yes" : "No"}
                     </li>
                   </ul>
+                  <ApiSubscribeButton
+                    plan={plan}
+                    label={
+                      plan === "enterprise"
+                        ? "Subscribe — usage-based"
+                        : `Subscribe — ${API_PLAN_PRICING[plan].price}`
+                    }
+                  />
                 </div>
               ))}
             </div>
@@ -335,23 +342,60 @@ X-RateLimit-Remaining-Day: 24818`}</CodeBlock>
             ))}
           </section>
 
+          <CheckoutStatusBanner />
+
           <section className="rounded-2xl border border-cyan-500/25 bg-cyan-950/20 p-6 text-center">
-            <h2 className="text-lg font-semibold text-zinc-100">Get API access</h2>
+            <h2 className="text-lg font-semibold text-zinc-100">Manage billing</h2>
             <p className="mx-auto mt-2 max-w-lg text-sm text-dr-muted">
-              Email us with your use case and preferred plan. We will provision a key and
-              help you integrate generate and check flows into your product.
+              Update your card, view invoices, or cancel your subscription in the
+              Stripe customer portal.
             </p>
-            <a
-              href="mailto:hello@yournewhandle.com?subject=yournewhandle%20API%20access"
-              className="btn-pipeline mt-4 inline-flex rounded-xl px-5 py-2.5 text-xs font-semibold"
-            >
-              Request API key
-            </a>
+            <ApiBillingPortal />
           </section>
         </article>
       </main>
 
       <DnsRobotFooter />
     </div>
+  );
+}
+
+function CheckoutStatusBanner() {
+  return (
+    <Suspense fallback={null}>
+      <CheckoutStatusBannerInner />
+    </Suspense>
+  );
+}
+
+function CheckoutStatusBannerInner() {
+  const searchParams = useSearchParams();
+  const checkout = searchParams.get("checkout");
+  const sessionId = searchParams.get("session_id");
+
+  if (checkout === "success" && sessionId) {
+    return (
+      <div className="mb-8">
+        <ApiCheckoutSuccess sessionId={sessionId} />
+      </div>
+    );
+  }
+
+  if (checkout === "cancelled") {
+    return (
+      <section className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-dr-muted">
+        Checkout was cancelled. Choose a plan below when you are ready.
+      </section>
+    );
+  }
+
+  return null;
+}
+
+export function ApiDocsPageWithSuspense() {
+  return (
+    <Suspense fallback={null}>
+      <ApiDocsPage />
+    </Suspense>
   );
 }
