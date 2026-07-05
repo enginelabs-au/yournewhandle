@@ -202,8 +202,6 @@ function parseFacebookHtml(body: string, status: number): CheckResult {
     return { status: AvailabilityStatus.Taken };
   }
 
-  // Meta datacenter responses often omit the unavailable banner but still
-  // return an empty shell with userID 0 and no profile assets.
   if (/"userID":0\b/.test(body) && !body.includes("profile_header")) {
     return { status: AvailabilityStatus.Available };
   }
@@ -212,6 +210,22 @@ function parseFacebookHtml(body: string, status: number): CheckResult {
     status: AvailabilityStatus.Error,
     errorDetail: "Facebook check inconclusive",
   };
+}
+
+function facebookLoginRedirectTargetsProfile(
+  location: string,
+  nick: string,
+): boolean {
+  try {
+    const next = new URL(location, "https://www.facebook.com").searchParams.get("next");
+    if (!next) {
+      return false;
+    }
+    const path = new URL(next, "https://www.facebook.com").pathname.replace(/\/$/, "");
+    return path === `/${nick}` || path.endsWith(`/${nick}`);
+  } catch {
+    return false;
+  }
 }
 
 export async function checkFacebook(nick: string): Promise<CheckResult> {
@@ -225,7 +239,10 @@ export async function checkFacebook(nick: string): Promise<CheckResult> {
 
   if (manual.status === 301 || manual.status === 302) {
     const location = manual.headers.get("location") ?? "";
-    if (location.includes("login.php") || location.includes("/login")) {
+    if (
+      location.includes("login.php") &&
+      facebookLoginRedirectTargetsProfile(location, nick)
+    ) {
       return { status: AvailabilityStatus.Taken };
     }
   }
