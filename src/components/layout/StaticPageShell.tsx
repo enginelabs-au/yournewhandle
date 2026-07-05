@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { DnsRobotHeader } from "@/components/layout/DnsRobotHeader";
-import { DnsRobotFooter } from "@/components/layout/DnsRobotFooter";
+import { SiteHeader } from "@/components/layout/SiteHeader";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 
 type StaticPageShellProps = {
   title: string;
@@ -11,7 +11,7 @@ type StaticPageShellProps = {
 export function StaticPageShell({ title, description, children }: StaticPageShellProps) {
   return (
     <div className="dr-page flex min-h-screen flex-col">
-      <DnsRobotHeader />
+      <SiteHeader />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 lg:px-6">
         <header className="mb-8 border-b border-dr-border pb-6">
           <h1 className="text-3xl font-bold tracking-tight text-zinc-100">{title}</h1>
@@ -21,7 +21,7 @@ export function StaticPageShell({ title, description, children }: StaticPageShel
         </header>
         <article className="legal-prose pb-12">{children}</article>
       </main>
-      <DnsRobotFooter />
+      <SiteFooter />
     </div>
   );
 }

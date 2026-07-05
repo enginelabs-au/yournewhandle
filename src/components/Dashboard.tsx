@@ -1,7 +1,7 @@
 "use client";
 
-import { DnsRobotHeader } from "@/components/layout/DnsRobotHeader";
-import { DnsRobotFooter } from "@/components/layout/DnsRobotFooter";
+import { SiteHeader } from "@/components/layout/SiteHeader";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import { RotatingPlatformHero } from "@/components/layout/RotatingPlatformHero";
 import { WorkflowSubheading } from "@/components/layout/WorkflowSubheading";
 import { StudioZoneLabel } from "@/components/layout/StudioZoneLabel";
@@ -223,7 +223,7 @@ export function Dashboard() {
 
   return (
     <div className="dr-page flex min-h-screen flex-col">
-      <DnsRobotHeader />
+      <SiteHeader />
 
       <main className="mx-auto w-full max-w-[1680px] flex-1 px-4 py-6 lg:px-6 lg:py-8">
         <RotatingPlatformHero params={params} />
@@ -311,7 +311,7 @@ export function Dashboard() {
         </InspectorErrorBoundary>
       </main>
 
-      <DnsRobotFooter />
+      <SiteFooter />
     </div>
   );
 }

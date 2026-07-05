@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { DnsRobotHeader } from "@/components/layout/DnsRobotHeader";
-import { DnsRobotFooter } from "@/components/layout/DnsRobotFooter";
+import { SiteHeader } from "@/components/layout/SiteHeader";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import { ApiBillingPortal } from "@/components/developers/ApiBillingPortal";
 import { ApiCheckoutSuccess } from "@/components/developers/ApiCheckoutSuccess";
 import { ApiSubscribeButton } from "@/components/developers/ApiSubscribeButton";
@@ -94,7 +94,7 @@ export function ApiDocsPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <DnsRobotHeader />
+      <SiteHeader />
 
       <main className="mx-auto flex w-full max-w-[1400px] flex-1 gap-8 px-4 py-8 lg:px-6">
         <aside className="hidden w-56 shrink-0 lg:block">
@@ -430,7 +430,7 @@ X-RateLimit-Remaining-Day: 24818`}</CodeBlock>
         </article>
       </main>
 
-      <DnsRobotFooter />
+      <SiteFooter />
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { ApiNavMenu } from "@/components/layout/ApiNavMenu";
 import { useAppPreferences } from "@/context/AppPreferencesProvider";
 import { PLATFORM_COUNT, PLATFORM_REGISTRY } from "@/lib/platforms-registry";
 
-export function DnsRobotHeader() {
+export function SiteHeader() {
   const { t } = useAppPreferences();
   const [platformIndex, setPlatformIndex] = useState(0);
 
