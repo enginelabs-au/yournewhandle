@@ -33,5 +33,15 @@ export function detectBlockedResponse(
     return "NameMC blocked";
   }
 
+  if (
+    (serviceName === "Instagram" || serviceName === "Facebook") &&
+    status === 200 &&
+    body.length < 50_000 &&
+    !body.includes('"pageID":"httpErrorPage"') &&
+    !body.includes("This content isn't available")
+  ) {
+    return "Meta blocked or rate limited";
+  }
+
   return null;
 }

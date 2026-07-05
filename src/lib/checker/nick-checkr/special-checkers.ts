@@ -4,10 +4,14 @@ import {
   TimeoutError,
   type CheckResult,
 } from "@/lib/checker/nick-checkr/abstract-service";
+import { detectBlockedResponse } from "@/lib/checker/nick-checkr/blocked-detection";
 
 const TIMEOUT_MS = 10_000;
 const REDDIT_MIN_INTERVAL_MS = 2_500;
 const impit = new Impit({ browser: "chrome" });
+
+/** Public web app id used by Instagram's logged-out web_profile_info endpoint. */
+const INSTAGRAM_WEB_APP_ID = "936619743392459";
 
 let redditNextAllowedAt = 0;
 let redditQueue: Promise<void> = Promise.resolve();
@@ -72,6 +76,99 @@ export async function checkTikTok(nick: string): Promise<CheckResult> {
   return {
     status: AvailabilityStatus.Error,
     errorDetail: `TikTok oembed HTTP ${response.status}`,
+  };
+}
+
+function parseInstagramHtml(body: string, status: number): CheckResult {
+  const blocked = detectBlockedResponse("Instagram", status, body);
+  if (blocked) {
+    return { status: AvailabilityStatus.Error, errorDetail: blocked };
+  }
+
+  if (body.includes('"pageID":"httpErrorPage"')) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (body.includes("PolarisProfilePage") && body.includes('"username"')) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: "Instagram check inconclusive",
+  };
+}
+
+export async function checkInstagram(nick: string): Promise<CheckResult> {
+  const apiUrl = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(nick)}`;
+  const apiResponse = await fetchWithTimeout(apiUrl, {
+    headers: {
+      Accept: "*/*",
+      "X-IG-App-ID": INSTAGRAM_WEB_APP_ID,
+      "X-Requested-With": "XMLHttpRequest",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+  });
+  const apiBody = await apiResponse.text();
+
+  if (apiResponse.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (apiResponse.status === 200) {
+    try {
+      const payload = JSON.parse(apiBody) as {
+        data?: { user?: { username?: string } };
+      };
+      if (payload.data?.user?.username) {
+        return { status: AvailabilityStatus.Taken };
+      }
+    } catch {
+      // fall through to HTML fallback
+    }
+  }
+
+  const apiBlocked = detectBlockedResponse("Instagram", apiResponse.status, apiBody);
+  if (apiBlocked) {
+    return { status: AvailabilityStatus.Error, errorDetail: apiBlocked };
+  }
+
+  const htmlResponse = await fetchWithTimeout(`https://www.instagram.com/${nick}/`, {
+    headers: { "Accept-Language": "en-US,en;q=0.9" },
+  });
+  const htmlBody = await htmlResponse.text();
+  return parseInstagramHtml(htmlBody, htmlResponse.status);
+}
+
+export async function checkFacebook(nick: string): Promise<CheckResult> {
+  const response = await fetchWithTimeout(`https://www.facebook.com/${encodeURIComponent(nick)}`, {
+    headers: { "Accept-Language": "en-US,en;q=0.9" },
+  });
+  const body = await response.text();
+
+  const blocked = detectBlockedResponse("Facebook", response.status, body);
+  if (blocked) {
+    return { status: AvailabilityStatus.Error, errorDetail: blocked };
+  }
+
+  if (
+    body.includes("This content isn't available") ||
+    body.includes("This page isn't available")
+  ) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  if (body.includes("entity_id")) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  if (response.status === 404) {
+    return { status: AvailabilityStatus.Available };
+  }
+
+  return {
+    status: AvailabilityStatus.Error,
+    errorDetail: "Facebook check inconclusive",
   };
 }
 
@@ -249,6 +346,8 @@ const SPECIAL_CHECKERS: Record<
   string,
   (nick: string) => Promise<CheckResult>
 > = {
+  Instagram: checkInstagram,
+  Facebook: checkFacebook,
   TikTok: checkTikTok,
   Threads: checkThreads,
   Reddit: checkReddit,

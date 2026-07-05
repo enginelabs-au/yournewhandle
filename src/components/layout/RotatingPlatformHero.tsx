@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check } from "lucide-react";
+import { useMemo } from "react";
+import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { useAppPreferences } from "@/context/AppPreferencesProvider";
-import { generateHeroHandle } from "@/lib/hero-generate";
+import { useVerifiedHeroHandles } from "@/hooks/useVerifiedHeroHandles";
 import { PLATFORM_COUNT } from "@/lib/platforms-registry";
 import type { GenerationParams } from "@/lib/types";
-
-const ROTATE_MS = 2600;
 
 type RotatingPlatformHeroProps = {
   params: GenerationParams;
@@ -15,8 +13,6 @@ type RotatingPlatformHeroProps = {
 
 export function RotatingPlatformHero({ params }: RotatingPlatformHeroProps) {
   const { t } = useAppPreferences();
-  const [handle, setHandle] = useState("");
-  const [animating, setAnimating] = useState(false);
 
   const heroParams = useMemo(
     () => ({
@@ -55,42 +51,33 @@ export function RotatingPlatformHero({ params }: RotatingPlatformHeroProps) {
     ],
   );
 
-  const nextHandle = useCallback(() => generateHeroHandle(heroParams), [heroParams]);
+  const { displayHandle, isReady, animating, isVerifying } =
+    useVerifiedHeroHandles(heroParams);
 
-  useEffect(() => {
-    setHandle(nextHandle());
-  }, [nextHandle]);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setAnimating(true);
-      window.setTimeout(() => {
-        setHandle(nextHandle());
-        setAnimating(false);
-      }, 280);
-    }, ROTATE_MS);
-
-    return () => window.clearInterval(interval);
-  }, [nextHandle]);
-
-  const displayHandle = handle || nextHandle();
+  const titleText = displayHandle ?? "···";
 
   return (
     <div className="hero-section mb-4 animate-fade-in-up">
       <h1 className="hero-title mx-auto flex max-w-3xl flex-col items-center gap-3 text-center">
         <span className="hero-platform-slot inline-flex overflow-hidden font-mono text-2xl font-bold sm:text-3xl lg:text-[2.35rem]">
           <span
-            key={displayHandle}
-            className={`hero-platform-word dr-title-gradient whitespace-nowrap ${animating ? "hero-platform-out" : "hero-platform-in"}`}
+            key={displayHandle ?? "loading"}
+            className={`hero-platform-word dr-title-gradient whitespace-nowrap ${animating ? "hero-platform-out" : "hero-platform-in"} ${isVerifying ? "opacity-60" : ""}`}
           >
-            {displayHandle}
+            {titleText}
           </span>
         </span>
 
         <span className="hero-available-bubble inline-flex items-center gap-2">
-          <Check className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span>{t("handleAvailable")}</span>
-          <AlertCircle className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
+          {isVerifying ? (
+            <Loader2 className="hero-available-icon h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+          ) : (
+            <Check className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
+          )}
+          <span>{isVerifying ? t("running") : t("handleAvailable")}</span>
+          {!isVerifying ? (
+            <AlertCircle className="hero-available-icon h-3.5 w-3.5 shrink-0" aria-hidden />
+          ) : null}
         </span>
       </h1>
 

@@ -16,6 +16,12 @@ import {
 } from "@/lib/api/docs-spec";
 import { API_PLAN_LIMITS, API_PLAN_PRICING, ENTERPRISE_USAGE_TIERS } from "@/lib/api/plans";
 import { PLATFORM_COUNT } from "@/lib/platforms-registry";
+import {
+  SITE_HELLO_EMAIL,
+  SITE_HELLO_MAILTO,
+  SITE_SUPPORT_EMAIL,
+  SITE_SUPPORT_MAILTO,
+} from "@/lib/site/contact";
 
 function CodeBlock({ children }: { children: string }) {
   return (
@@ -392,6 +398,34 @@ X-RateLimit-Remaining-Day: 24818`}</CodeBlock>
               Stripe customer portal.
             </p>
             <ApiBillingPortal />
+          </section>
+
+          <section
+            id="contact"
+            className="scroll-mt-28 rounded-2xl border border-dr-border bg-[rgb(12_16_28/0.5)] p-6"
+          >
+            <h2 className="text-lg font-semibold text-zinc-100">Contact</h2>
+            <p className="mt-2 max-w-xl text-sm text-dr-muted">
+              Questions about the API, billing, or enterprise plans? Reach out — we typically
+              reply within one business day.
+            </p>
+            <ul className="mt-4 space-y-2 text-sm">
+              <li>
+                <a href={SITE_HELLO_MAILTO} className="font-medium text-dr-blue-light hover:underline">
+                  {SITE_HELLO_EMAIL}
+                </a>
+                <span className="text-dr-muted"> — general inquiries</span>
+              </li>
+              <li>
+                <a
+                  href={SITE_SUPPORT_MAILTO}
+                  className="font-medium text-dr-blue-light hover:underline"
+                >
+                  {SITE_SUPPORT_EMAIL}
+                </a>
+                <span className="text-dr-muted"> — technical support &amp; API access</span>
+              </li>
+            </ul>
           </section>
         </article>
       </main>

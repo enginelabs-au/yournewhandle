@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { lookupApiKey, isApiEnabled, type ApiKeyRecord } from "@/lib/api/keys";
 import { enforceRateLimit, type RateLimitResult } from "@/lib/api/rate-limit";
 import { API_PLAN_LIMITS, type ApiPlan } from "@/lib/api/plans";
+import { SITE_SUPPORT_EMAIL } from "@/lib/site/contact";
 
 export type ApiAuthContext = {
   key: ApiKeyRecord;
@@ -41,7 +42,7 @@ export function apiDisabledResponse(): NextResponse {
       error: {
         code: "api_disabled",
         message:
-          "The yournewhandle API is not configured on this deployment. Contact support for access.",
+          `The yournewhandle API is not configured on this deployment. Contact ${SITE_SUPPORT_EMAIL} for access.`,
       },
     },
     { status: 503 },

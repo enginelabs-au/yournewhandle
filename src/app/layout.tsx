@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import { VercelAnalytics } from "@/components/VercelAnalytics";
+import { PLATFORM_COUNT } from "@/lib/platforms-registry";
+import { SITE_URL } from "@/lib/site/config";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,24 +16,26 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const siteDescription = `Check username availability across ${PLATFORM_COUNT} platforms. Generate pronounceable handles with our phonetic engine.`;
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://yournewhandle.com.au"),
-  title: "yournewhandle",
-  description:
-    "Check username availability across 30 social platforms. Generate pronounceable handles with our phonetic engine.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "yournewhandle — handle generator & username checker",
+    template: "%s | yournewhandle",
+  },
+  description: siteDescription,
   openGraph: {
-    title: "yournewhandle",
-    description:
-      "Check username availability across 30 social platforms. Generate pronounceable handles with our phonetic engine.",
-    url: "https://yournewhandle.com.au",
+    title: "yournewhandle — handle generator & username checker",
+    description: siteDescription,
+    url: SITE_URL,
     siteName: "yournewhandle",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "yournewhandle",
-    description:
-      "Check username availability across 30 social platforms. Generate pronounceable handles with our phonetic engine.",
+    title: "yournewhandle — handle generator & username checker",
+    description: siteDescription,
   },
 };
 

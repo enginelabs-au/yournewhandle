@@ -2077,6 +2077,20 @@ input[type="range"].neon-slider::-webkit-slider-thumb {
   color: #93c5fd;
 }
 
+.legal-prose {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.legal-prose a {
+  transition: color 0.2s ease;
+}
+
+.legal-prose ul {
+  margin-top: 0.25rem;
+}
+
 /* Randomize matrix animation */
 .randomize-matrix-panel-active {
   box-shadow: 0 0 24px rgb(168 85 247 / 0.12);
