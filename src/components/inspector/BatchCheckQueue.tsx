@@ -106,8 +106,6 @@ function summarizeBatchCategory(
     if (statuses.length === 0) {
       if (isRunning) {
         summary.loading += 1;
-      } else {
-        summary.unknown += 1;
       }
       continue;
     }

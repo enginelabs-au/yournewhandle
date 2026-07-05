@@ -103,14 +103,10 @@ export function CheckerCategorySection({
             ) : null}
           </div>
 
-          {!isOpen ? (
-            hasCheckResults ? (
-              <StatusPills summary={summary} />
-            ) : (
-              <p className="check-category-subtitle truncate">
-                {categoryCollapsedSubtitle(platforms)}
-              </p>
-            )
+          {!hasCheckResults ? (
+            <p className="check-category-subtitle truncate">
+              {categoryCollapsedSubtitle(platforms)}
+            </p>
           ) : (
             <StatusPills summary={summary} />
           )}

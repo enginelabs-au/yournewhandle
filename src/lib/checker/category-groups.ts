@@ -96,6 +96,8 @@ export function summarizeCategoryStatuses(
       case "loading":
         summary.loading += 1;
         break;
+      case "idle":
+        break;
       default:
         summary.unknown += 1;
     }
