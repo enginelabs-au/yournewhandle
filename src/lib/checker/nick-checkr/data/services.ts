@@ -21,7 +21,6 @@ export const services: ServiceDefinition[] = [
   { name: 'PyPI', url: 'https://pypi.org/user/{}/', category: 'Developer', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Hashnode', url: 'https://hashnode.com/@{}', category: 'Developer', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Replit', url: 'https://replit.com/@{}', category: 'Developer', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
-  { name: 'Kaggle', url: 'https://www.kaggle.com/{}', category: 'Developer', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Gitee', url: 'https://gitee.com/{}', category: 'Developer', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'Coderwall', url: 'https://coderwall.com/{}', category: 'Developer', checkMethod: CheckMethod.Standard, testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },
   { name: 'devRant', url: 'https://devrant.com/users/{}', category: 'Developer', checkMethod: CheckMethod.BodyMatch, bodyMatch: 'Join a fun community of developers', testTakenNick: 'alex', testAvailableNick: 'alex3232e2e2e' },

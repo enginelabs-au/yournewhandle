@@ -960,6 +960,46 @@ export async function checkLastFm(nick: string): Promise<CheckResult> {
   };
 }
 
+export async function checkRoblox(nick: string): Promise<CheckResult> {
+  const response = await fetchPlainWithTimeout(
+    "https://users.roblox.com/v1/usernames/users",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        usernames: [nick],
+        excludeBannedUsers: false,
+      }),
+    },
+  );
+
+  let payload: { data?: { id?: number; name?: string }[] };
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: "Roblox API returned invalid JSON",
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      status: AvailabilityStatus.Error,
+      errorDetail: `Roblox API HTTP ${response.status}`,
+    };
+  }
+
+  if (Array.isArray(payload.data) && payload.data.length > 0) {
+    return { status: AvailabilityStatus.Taken };
+  }
+
+  return { status: AvailabilityStatus.Available };
+}
+
 const SPECIAL_CHECKERS: Record<
   string,
   (nick: string) => Promise<CheckResult>
@@ -982,6 +1022,7 @@ const SPECIAL_CHECKERS: Record<
   npm: checkNpm,
   "Chess.com": checkChessCom,
   "Last.fm": checkLastFm,
+  Roblox: checkRoblox,
 };
 
 export function getSpecialChecker(
