@@ -29,8 +29,8 @@ const STATUS_STYLES: Record<
     label: "Verify",
   },
   error: {
-    className: "text-status-taken border-status-taken/50 bg-status-taken/15",
-    label: "Error",
+    className: "text-status-unknown border-status-unknown/50 bg-status-unknown/15",
+    label: "Unknown",
   },
 };
 
@@ -54,10 +54,10 @@ export function CheckStatusBadge({ status, message, compact }: CheckStatusBadgeP
         <Loader2 className={`animate-spin ${compact ? "h-2.5 w-2.5" : "h-3 w-3"}`} aria-hidden />
       ) : status === "available" ? (
         <Check className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} aria-hidden />
-      ) : status === "verify" || status === "unknown" ? (
-        <HelpCircle className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} aria-hidden />
-      ) : status === "taken" || status === "error" ? (
+      ) : status === "taken" ? (
         <X className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} aria-hidden />
+      ) : status === "verify" || status === "unknown" || status === "error" ? (
+        <HelpCircle className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} aria-hidden />
       ) : null}
       {style.label}
     </span>

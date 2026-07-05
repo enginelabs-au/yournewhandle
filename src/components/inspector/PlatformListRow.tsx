@@ -15,7 +15,7 @@ const STATUS_STYLES: Record<
   taken: { label: "Taken", bar: "bg-rose-400", text: "text-rose-300", bg: "bg-rose-950/35" },
   unknown: { label: "Unknown", bar: "bg-amber-400", text: "text-amber-300", bg: "bg-amber-950/35" },
   verify: { label: "Unknown", bar: "bg-amber-400", text: "text-amber-300", bg: "bg-amber-950/35" },
-  error: { label: "Taken", bar: "bg-rose-400", text: "text-rose-300", bg: "bg-rose-950/35" },
+  error: { label: "Unknown", bar: "bg-amber-400", text: "text-amber-300", bg: "bg-amber-950/35" },
 };
 
 type PlatformListRowProps = {

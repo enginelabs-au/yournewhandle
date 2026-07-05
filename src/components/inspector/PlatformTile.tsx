@@ -13,7 +13,7 @@ const TILE_GLOW: Record<CheckStatus, string> = {
   taken: "check-tile-taken",
   unknown: "check-tile-unknown",
   verify: "check-tile-unknown",
-  error: "check-tile-taken",
+  error: "check-tile-unknown",
 };
 
 const STATUS_KEY: Record<
@@ -26,7 +26,7 @@ const STATUS_KEY: Record<
   taken: "statusTaken",
   unknown: "statusUnknown",
   verify: "statusUnknown",
-  error: "statusTaken",
+  error: "statusUnknown",
 };
 
 type PlatformTileProps = {
