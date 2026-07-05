@@ -5,8 +5,10 @@ import {
   isStripeConfigured,
   siteUrl,
   stripeBillingPortalConfiguration,
+  stripeEnterpriseBasePriceId,
   stripePriceIdForPlan,
 } from "@/lib/stripe/config";
+import { buildCheckoutLineItems } from "@/lib/stripe/checkout-line-items";
 
 const VALID_PLANS = new Set<ApiPlan>(["starter", "pro", "enterprise"]);
 
@@ -52,12 +54,12 @@ export async function POST(request: Request) {
   const origin = siteUrl();
 
   try {
-    const price = await stripe.prices.retrieve(priceId);
-    const isMetered = price.recurring?.usage_type === "metered";
-
-    const lineItems: { price: string; quantity?: number }[] = isMetered
-      ? [{ price: priceId }]
-      : [{ price: priceId, quantity: 1 }];
+    const lineItems = await buildCheckoutLineItems(
+      stripe,
+      plan,
+      priceId,
+      plan === "enterprise" ? stripeEnterpriseBasePriceId() : null,
+    );
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",

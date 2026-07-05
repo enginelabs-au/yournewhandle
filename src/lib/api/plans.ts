@@ -56,7 +56,8 @@ export const API_PLAN_PRICING: Record<
   },
   enterprise: {
     label: "Enterprise",
-    price: "Usage-based",
-    description: "Graduated usage pricing, high limits, SLA, dedicated support.",
+    price: "$199/mo + usage",
+    description:
+      "$199 platform fee plus graduated usage billing. High limits, SLA, dedicated support.",
   },
 };

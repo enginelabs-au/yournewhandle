@@ -33,11 +33,17 @@ export function stripePriceIdForPlan(plan: ApiPlan): string | null {
   return map[plan]?.trim() || null;
 }
 
+/** Enterprise platform fee ($199/mo) — paired with STRIPE_PRICE_ENTERPRISE (metered usage). */
+export function stripeEnterpriseBasePriceId(): string | null {
+  return process.env.STRIPE_PRICE_ENTERPRISE_BASE?.trim() || null;
+}
+
 export function isStripeConfigured(): boolean {
   return Boolean(
     stripeSecretKey() &&
       stripePriceIdForPlan("starter") &&
       stripePriceIdForPlan("pro") &&
-      stripePriceIdForPlan("enterprise"),
+      stripePriceIdForPlan("enterprise") &&
+      stripeEnterpriseBasePriceId(),
   );
 }
